@@ -1,0 +1,117 @@
+---
+title: 'Settings Panel'
+description: 'Configure language, voice speed, font size, recording mode, and auto-send behavior'
+---
+
+The Settings panel allows you to customize ChatbotAI-Free's behavior and appearance. Access it by clicking the ⚙️ Settings button in the main interface.
+
+## Language Selection
+
+Choose your preferred language for both speech recognition and text-to-speech:
+
+- **English** - Uses Whisper STT with `en` language code
+- **Español (Spanish)** - Uses Whisper STT with `es` language code
+
+<Note>
+Changing the language affects both speech-to-text transcription and the available voice options. Kokoro TTS supports both English and Spanish natively.
+</Note>
+
+The language setting is stored in `user_preferences.json:36` and defaults to `"english"`.
+
+## Voice Speed Adjustment
+
+Control how fast the AI speaks with the voice speed multiplier:
+
+<Steps>
+  <Step title="Range">
+    Adjust speed from **0.5× to 2.0×** using the slider or input field
+  </Step>
+  <Step title="Default">
+    The default speed is **1.0×** (normal speaking pace)
+  </Step>
+  <Step title="Apply">
+    Changes take effect immediately for the next TTS response
+  </Step>
+</Steps>
+
+<Info>
+The voice speed setting is passed to both Kokoro and Sherpa-ONNX TTS engines via the `speed` parameter in `tts_manager.py:94`.
+</Info>
+
+## Font Size Options
+
+Choose from three preset font sizes to improve readability:
+
+| Size | Bubble Text | Input Text | Status Text |
+|------|-------------|------------|-------------|
+| **Small** | 13px | 12px | 11px |
+| **Medium** (default) | 15px | 14px | 13px |
+| **Large** | 18px | 16px | 15px |
+
+Font size configurations are defined in `preferences.py:42-58`.
+
+## Recording Mode Settings
+
+Configure how voice recording behaves:
+
+### Silence Duration
+
+The recorder uses Voice Activity Detection (VAD) to automatically stop recording after detecting silence:
+
+- **Default**: 3.0 seconds of silence
+- **Adjustable**: Change in `audio_utils.py:27`
+- **Minimum audio duration**: 1.0 seconds (filters out clicks and noise)
+
+<Note>
+The silence threshold is set to 0.03 RMS to avoid triggering on background noise. This is configured in `audio_utils.py:21`.
+</Note>
+
+### Sample Rate
+
+The recorder uses a **16000 Hz** sample rate optimized for Whisper STT. If your microphone's native sample rate differs, audio is automatically resampled (see `audio_utils.py:61-63`).
+
+## Auto-Send Configuration
+
+Control whether recorded voice messages are sent automatically:
+
+<Accordion title="Auto-Send Enabled (Default)">
+  When enabled (`auto_send: true`), voice recordings are automatically transcribed and sent to the AI immediately after silence is detected.
+  
+  **Use case**: Hands-free conversation in Live Mode
+</Accordion>
+
+<Accordion title="Auto-Send Disabled">
+  When disabled (`auto_send: false`), you must manually press the send button after recording.
+  
+  **Use case**: Review transcriptions before sending in Classic Chat mode
+</Accordion>
+
+The auto-send preference is stored in `preferences.py:30` and defaults to `true`.
+
+## Saving Settings
+
+All settings are automatically saved to `user_preferences.json` when you click the Save or Apply button. The preferences file is located in the application's root directory.
+
+<Warning>
+Changes to the Whisper model size require an application restart to take effect. You'll be prompted to restart immediately after changing this setting.
+</Warning>
+
+## Default Settings
+
+If the preferences file doesn't exist or is corrupted, the app uses these defaults (from `preferences.py:28-40`):
+
+```json
+{
+  "model": null,
+  "auto_send": true,
+  "font_size": "medium",
+  "language": "english",
+  "voice_speed": 1.0,
+  "english_voice": "af_bella",
+  "spanish_voice": "ef_dora",
+  "output_device": -1,
+  "input_device": -1,
+  "context_size": 0,
+  "whisper_model": "base"
+}
+```

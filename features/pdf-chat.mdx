@@ -1,0 +1,273 @@
+---
+title: "PDF Chat"
+description: "Attach PDF documents to your conversation and ask questions about their contents"
+---
+
+## Overview
+
+ChatbotAI-Free lets you **attach PDF files** directly into the conversation context. The app extracts the full text, counts tokens, and injects it into the AI's memory — no external vector database or RAG pipeline required.
+
+---
+
+## How to Use PDF Chat
+
+<Steps>
+  <Step title="Attach a PDF">
+    Click the **📎 Attach** button in the main window. Select a PDF file from your file system.
+  </Step>
+  
+  <Step title="Review the confirmation dialog">
+    A dialog appears showing:
+    - **File name** and file size
+    - **Extracted text** (first 500 characters preview)
+    - **Token count** (using tiktoken's `cl100k_base` tokenizer)
+    - **Context window stats**: `document_tokens / model_context_size (percentage)`
+    
+    <Info>
+      The dialog shows exactly how much of your model's context window the document will consume.
+    </Info>
+  </Step>
+  
+  <Step title="Confirm to inject">
+    Click **OK** to inject the document into the conversation history. The AI receives:
+    
+    ```
+    I'm sharing the contents of the document 'filename.pdf' with you.
+    Use it as context to answer my following questions:
+    
+    [full extracted text]
+    ```
+    
+    The AI responds:
+    
+    ```
+    Got it! I've read the document **filename.pdf**.
+    Feel free to ask me anything about it.
+    ```
+  </Step>
+  
+  <Step title="Ask questions">
+    Now you can ask questions about the document's contents. The AI has the full text in its context window and will reference it when answering.
+  </Step>
+</Steps>
+
+---
+
+## Text Extraction
+
+### PyMuPDF (fitz)
+
+ChatbotAI-Free uses [PyMuPDF](https://pymupdf.readthedocs.io/) to extract text from PDFs.
+
+**Extraction process:**
+1. Open the PDF file with `fitz.open(pdf_path)`
+2. Iterate through all pages
+3. Extract text from each page using `page.get_text("text")`
+4. Concatenate all pages into a single string
+
+**Supported content:**
+- Plain text
+- Formatted paragraphs
+- Tables (extracted as plain text)
+- Headers and footers
+
+<Warning>
+  **Scanned PDFs** (images of text) are **not supported**. Only PDFs with embedded text layers work. If you have a scanned PDF, use OCR software (e.g., Adobe Acrobat, Tesseract) to convert it first.
+</Warning>
+
+---
+
+## Token Counting
+
+### tiktoken Tokenizer
+
+The app uses OpenAI's [tiktoken](https://github.com/openai/tiktoken) library with the `cl100k_base` encoding (used by GPT-4, GPT-3.5-turbo).
+
+**Why tiktoken?**
+- Provides a **close approximation** of token counts for most LLMs
+- Ollama models (Llama, Mistral, Gemma) use similar tokenization schemes
+- Fast and deterministic
+
+**Token count formula:**
+```python
+import tiktoken
+encoding = tiktoken.get_encoding("cl100k_base")
+token_count = len(encoding.encode(extracted_text))
+```
+
+<Info>
+  Token counts are **estimates**. Different models may tokenize text slightly differently, but tiktoken provides a good ballpark figure.
+</Info>
+
+---
+
+## Context Window Management
+
+### How It Works
+
+When you inject a PDF:
+
+1. **Token counting**: The extracted text is tokenized
+2. **Context calculation**: The app queries your current model's context window size (e.g., 4096, 8192, 32768, 128000)
+3. **Usage percentage**: `document_tokens / model_context_size × 100`
+
+**Example:**
+- Document: 12,000 tokens
+- Model: `llama3.1:8b` (128K context)
+- Usage: `12000 / 131072 ≈ 9.2%`
+
+### Context Window Indicator
+
+After injecting a PDF, the **context donut** (bottom-right) updates to show:
+- **Green** (under 50%): Plenty of room for questions
+- **Yellow** (50-80%): Approaching limit
+- **Red** (over 80%): High risk of losing earlier context
+
+<Note>
+  When the context window fills up, **older messages are dropped** by the LLM. Your PDF will eventually be evicted if you ask too many follow-up questions.
+</Note>
+
+### Model Context Sizes
+
+The app automatically queries your model's context size using `ollama.show(model_name)`.
+
+**Common sizes:**
+- Llama 3.1 (8B): **128K tokens** (131,072)
+- Mistral 7B: **8K tokens** (8,192)
+- Gemma 2: **8K tokens** (8,192)
+- DeepSeek R1: **64K tokens** (65,536)
+
+<Info>
+  You can override the context size in Settings by setting a custom `num_ctx` value. This takes priority over the model's default.
+</Info>
+
+---
+
+## Workflow Example
+
+### Attaching a Research Paper
+
+<Accordion title="Example: Analyzing a 20-page PDF">
+  **Scenario**: You have a 20-page research paper (PDF) and want to ask questions about the methodology.
+  
+  **Steps:**
+  
+  1. **Attach PDF**
+     - Click 📎 Attach
+     - Select `research_paper.pdf` (20 pages, 45,000 characters)
+  
+  2. **Review confirmation**
+     - File name: `research_paper.pdf`
+     - Tokens: ~11,250 (tiktoken estimate)
+     - Model: `llama3.1:8b` (128K context)
+     - Usage: `11250 / 131072 = 8.6%`
+  
+  3. **Inject**
+     - Click OK
+     - AI confirms: *"Got it! I've read the document **research_paper.pdf**. Feel free to ask me anything about it."*
+  
+  4. **Ask questions**
+     - "What methodology did the authors use?"
+     - "Summarize the key findings in 3 bullet points"
+     - "What are the limitations mentioned in the discussion section?"
+  
+  5. **Monitor context**
+     - Context donut shows 18% after 3 questions (conversation history + document)
+     - Still plenty of room for more questions
+</Accordion>
+
+---
+
+## Limitations
+
+### Token Budget
+
+**Problem**: Large documents consume significant context.
+
+**Solution**:
+- Use models with **large context windows** (Llama 3.1 128K, GPT-4 Turbo 128K)
+- Split large documents into smaller sections
+- Start a **new chat** if context fills up (the document will be lost, but you can re-attach it)
+
+### Text-Only Extraction
+
+**Not supported**:
+- Images, charts, diagrams
+- Scanned PDFs (no embedded text)
+- Complex layouts (multi-column, rotated text)
+
+**Workaround**: Use OCR software to convert scanned PDFs to text-based PDFs first.
+
+### No Persistence
+
+**Behavior**: PDF contents are **only stored in the current conversation**.
+
+**Implication**:
+- If you start a new chat, the PDF is **not** carried over
+- Chat history is saved as Markdown files, but the PDF text is embedded as a single message
+- Re-opening a saved chat **does** restore the PDF context (it's in the conversation history)
+
+---
+
+## Tips for Best Results
+
+<Tabs>
+  <Tab title="Large Documents">
+    **For PDFs >100 pages:**
+    - Use a model with **128K+ context** (e.g., Llama 3.1)
+    - Ask **specific questions** to avoid forcing the AI to reprocess the entire document
+    - Consider splitting the PDF into chapters or sections
+  </Tab>
+  
+  <Tab title="Multiple Documents">
+    **For comparing PDFs:**
+    - Attach documents **sequentially** in the same chat
+    - Ask the AI to reference both: *"Compare the methodology in document1.pdf vs document2.pdf"*
+    - Monitor context usage carefully (multiple docs add up fast)
+  </Tab>
+  
+  <Tab title="Follow-Up Questions">
+    **For deep analysis:**
+    - Start with **broad questions** ("Summarize this document")
+    - Then drill down ("Explain section 3 in detail")
+    - Reference specific page numbers if they're preserved in the text extraction
+  </Tab>
+</Tabs>
+
+---
+
+## Technical Details
+
+### Implementation
+
+The PDF injection logic is in `ai_manager.py:516-537`:
+
+```python
+def inject_document_context(self, filename: str, text: str):
+    """Inject the full text of a document into conversation history."""
+    self.conversation_history.append({
+        "role": "user",
+        "content": (
+            f"I'm sharing the contents of the document '{filename}' with you. "
+            f"Use it as context to answer my following questions:\n\n{text}"
+        ),
+    })
+    # Add a brief assistant ack
+    self.conversation_history.append({
+        "role": "assistant",
+        "content": (
+            f"Got it! I've read the document **{filename}**. "
+            "Feel free to ask me anything about it."
+        ),
+    })
+```
+
+**Why this works:**
+- The document text is treated as a **user message**
+- The AI's acknowledgment is a **assistant message**
+- Subsequent questions reference the injected context via the conversation history
+- No external vector DB or embeddings required
+
+<Note>
+  This approach is simple but **limited by context window size**. For massive document collections, consider using a RAG pipeline with vector embeddings (not currently supported).
+</Note>

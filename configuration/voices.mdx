@@ -1,0 +1,175 @@
+---
+title: 'Voice Configuration'
+description: 'Configure built-in Kokoro voices, add Sherpa-ONNX voice packs, and manage voice detection'
+---
+
+ChatbotAI-Free supports two TTS engines: built-in Kokoro voices for English and Spanish, and optional Sherpa-ONNX voice packs for additional languages.
+
+## Built-in Kokoro Voices
+
+Kokoro TTS v1.0 provides **54 high-quality voices** out of the box, including both English and Spanish speakers.
+
+### Voice Files
+
+Kokoro requires two files in the `voices/kokoro-v1.0/` directory:
+
+```
+voices/
+└── kokoro-v1.0/
+    ├── kokoro-v1.0.onnx    ← ~300 MB neural TTS model
+    └── voices-v1.0.bin     ← ~27 MB  (54 English + Spanish voices)
+```
+
+<Note>
+Download these files from the [kokoro-onnx releases page](https://github.com/thewh1teagle/kokoro-onnx/releases). They're too large to include in the repository.
+</Note>
+
+### Voice Loading
+
+The Kokoro wrapper loads voices from the binary file using NumPy:
+
+```python
+# From kokoro_wrapper.py:28-30
+data = np.load(voices_path, allow_pickle=False)
+self.voices = {name: data[name].astype(np.float32) for name in data.files}
+```
+
+## Voice Naming Convention
+
+Kokoro voices follow a specific naming pattern:
+
+- **Format**: `{age}{gender}_{name}`
+- **Age codes**: `a` (adult), `y` (young), `o` (old)
+- **Gender codes**: `f` (female), `m` (male)
+
+### Examples
+
+| Voice Name | Description |
+|------------|-------------|
+| `af_bella` | Adult female - Bella (default English voice) |
+| `af_sarah` | Adult female - Sarah |
+| `am_adam` | Adult male - Adam |
+| `ef_dora` | Spanish adult female - Dora (default Spanish voice) |
+| `yf_emma` | Young female - Emma |
+
+<Info>
+Kokoro voices **never contain hyphens** in their names. This is used by the TTS manager to distinguish them from Sherpa-ONNX voices (see `tts_manager.py:22`).
+</Info>
+
+## Adding Sherpa-ONNX Voice Packs
+
+Expand language support by adding Piper-compatible Sherpa-ONNX voice packs for French, Italian, German, Portuguese, and more.
+
+<Steps>
+  <Step title="Install Sherpa-ONNX">
+    First, install the sherpa-onnx Python package:
+    ```bash
+    pip install sherpa-onnx
+    ```
+  </Step>
+  
+  <Step title="Download a voice pack">
+    Browse available voices at [huggingface.co/csukuangfj](https://huggingface.co/csukuangfj).
+    
+    Download these files from the voice pack repository:
+    - The `.onnx` model file (e.g., `es_AR-daniela-high.onnx`)
+    - `tokens.txt`
+    - `espeak-ng-data/` directory
+  </Step>
+  
+  <Step title="Place in voices/ folder">
+    Create a folder inside `voices/` with the voice pack files:
+    ```
+    voices/
+    ├── kokoro-v1.0/
+    └── vits-piper-es_AR-daniela-high/  ← your new voice
+        ├── es_AR-daniela-high.onnx
+        ├── tokens.txt
+        └── espeak-ng-data/
+    ```
+  </Step>
+  
+  <Step title="Restart the app">
+    The voice scanner will detect the new pack and prompt you to classify its language.
+  </Step>
+</Steps>
+
+<Warning>
+Sherpa voice folder names must contain **hyphens** to be distinguished from Kokoro voices. The app uses this pattern to route synthesis to the correct engine.
+</Warning>
+
+## Voice Scanner Auto-Detection
+
+On startup, the voice scanner automatically detects installed voices:
+
+### Detection Criteria
+
+The scanner identifies Sherpa-ONNX voice packs by checking for:
+
+1. At least one `.onnx` file in the folder
+2. An `espeak-ng-data/` subdirectory
+
+From `voice_scanner.py:55-67`:
+
+```python
+def is_sherpa_voice_folder(folder_path: Path) -> bool:
+    if not folder_path.is_dir():
+        return False
+    has_onnx = any(folder_path.glob("*.onnx"))
+    has_espeak = (folder_path / "espeak-ng-data").is_dir()
+    return has_onnx and has_espeak
+```
+
+### Voice Configuration Storage
+
+Classifications are saved to `voices/voices_config.json` so you're only prompted once per voice pack:
+
+```json
+{
+  "vits-piper-es_AR-daniela-high": "spanish",
+  "vits-piper-fr_FR-siwis-medium": "french"
+}
+```
+
+## Language Classification for New Voices
+
+When a new Sherpa voice is detected, the app shows a one-time dialog asking you to assign it to a language category.
+
+<Accordion title="Why is classification needed?">
+  The TTS manager needs to know which language setting should activate each voice. This allows the app to automatically switch voices when you change the language in Settings.
+</Accordion>
+
+<Accordion title="What if I classify a voice incorrectly?">
+  Edit `voices/voices_config.json` manually and change the language assignment, then restart the app.
+</Accordion>
+
+### Classification Flow
+
+From `voice_scanner.py:130-142`:
+
+```python
+if is_sherpa_voice_folder(entry):
+    onnx_files = list(entry.glob("*.onnx"))
+    onnx_path = str(onnx_files[0]) if onnx_files else None
+    cached_lang = config.get(name)  # "english" / "spanish" / None
+    result["sherpa_voices"].append({
+        "folder": name,
+        "path": str(entry),
+        "onnx": onnx_path,
+        "language": cached_lang,
+        "is_new": cached_lang is None,
+    })
+```
+
+## Voice Selection
+
+Choose your active voice from the top dropdown menu in the main interface. The list includes:
+
+- All 54 built-in Kokoro voices
+- Any installed Sherpa-ONNX voice packs (classified by language)
+
+Voice preferences are saved per-language:
+- `english_voice`: Default voice for English (default: `"af_bella"`)
+- `spanish_voice`: Default voice for Spanish (default: `"ef_dora"`)
+
+See `preferences.py:34-35` for default voice assignments.

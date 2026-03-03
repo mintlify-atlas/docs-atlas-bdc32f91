@@ -1,80 +1,245 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get from installation to your first voice conversation in minutes
 ---
 
-## Get started in three steps
+## Launch the application
 
-Get your documentation site running locally and make your first customization.
+With your virtual environment activated, start ChatbotAI-Free:
 
-### Step 1: Set up your local environment
+```bash
+cd ChatbotAI-Free
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+python main.py
+```
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<Info>
+On first launch, Whisper downloads the `base` model (~140 MB). This happens automatically and only needs to be done once.
+</Info>
 
-### Step 2: Deploy your changes
+The voice scanner will check your `voices/` folder and detect available voices. If Kokoro files are present, you'll see 54 English and Spanish voices available immediately.
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Your first conversation
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
+  <Step title="Select your model and voice">
+    At the top of the window, you'll see two dropdowns:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    - **Model selector** (left): Choose your Ollama LLM (e.g., `llama3.1:8b`)
+    - **Voice selector** (right): Choose a voice (e.g., `af_bella` for English female)
 
-### Step 3: Go live
+    <Note>
+    The app automatically detects all available Ollama models. If you don't see your model, make sure you've pulled it with `ollama pull <model-name>`.
+    </Note>
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Start with text or voice">
+    You can interact in two ways:
+
+    **Text input:**
+    - Type your message in the text box at the bottom
+    - Press **Enter** to send (or **Shift+Enter** for a new line)
+
+    **Voice input:**
+    - Click the 🎤 **microphone button** to start recording
+    - Speak your message
+    - Click the button again to stop and send
+
+    <Info>
+    You can enable auto-send in Settings to automatically send when you stop speaking (using Voice Activity Detection).
+    </Info>
+
+    The app will:
+    1. Transcribe your speech (if using voice)
+    2. Show your message in a user bubble (right-aligned)
+    3. Stream the AI's response in real-time
+    4. Generate and play TTS audio simultaneously
+  </Step>
+
+  <Step title="Understand the UI elements">
+    **Chat area:**
+    - Your messages appear in **gray bubbles** on the right
+    - AI responses appear on the left with a **✨ avatar** and markdown rendering
+    - Code blocks, tables, and formatting are rendered automatically
+
+    **Status indicator (bottom-left):**
+    - "Ready" - Waiting for input
+    - "Transcribing..." - Converting speech to text
+    - "Thinking..." - LLM is generating response
+    - "Speaking..." - TTS is playing audio
+
+    **Context donut (bottom-right):**
+    - Shows conversation token usage as a colored ring
+    - Green < 50%, Yellow < 80%, Red > 80%
+    - Click to see detailed context window stats
+
+    <Warning>
+    When the context window fills up (100%), older messages are dropped. Start a new chat to preserve full context.
+    </Warning>
+  </Step>
+
+  <Step title="Try interrupting the AI">
+    While the AI is speaking, click the **⏹ Stop button** to interrupt mid-response. This is useful when:
+    - The AI goes off-topic
+    - You want to ask a follow-up immediately
+    - The response is taking too long
+
+    <Info>
+    In **Live Mode** (hands-free), you can naturally interrupt the AI by speaking—just like a real conversation. The app detects your voice and stops playback immediately.
+    </Info>
+  </Step>
+
+  <Step title="Save and manage conversations">
+    Conversations are **auto-saved** as Markdown files in the `chat_history/` folder.
+
+    **Sidebar navigation:**
+    - Click the **☰ hamburger button** to toggle the chat history sidebar
+    - Click **➕ New Chat** to start a fresh conversation
+    - Click any saved chat to resume it
+    - **Right-click** a chat to rename or delete it
+
+    **Chat titles:**
+    - Generated automatically by the lightest available Ollama model
+    - Based on the first user message
+    - Can be renamed manually by right-clicking
+
+    <Note>
+    Each chat maintains its own conversation history and context. Switching chats loads the full history and updates the context donut.
+    </Note>
+  </Step>
+</Steps>
+
+## Explore conversation modes
+
+### Classic chat mode (default)
+
+Turn-by-turn conversations with full control:
+- Type or speak your message
+- See markdown-rendered responses in real-time
+- Interrupt with the Stop button
+- Perfect for detailed discussions, coding help, or document analysis
+
+### Live mode (hands-free)
+
+Click the **✨ Live button** for continuous conversation:
+- Completely hands-free interaction
+- Voice Activity Detection (VAD) automatically detects when you stop speaking
+- Natural barge-in: interrupt the AI mid-sentence by speaking
+- The app mutes itself when you click the Live button again
+
+<Info>
+**Barge-in detection** monitors your voice in real-time. When you start speaking while the AI is talking, playback stops immediately and the app starts listening to you.
+</Info>
+
+<Warning>
+Live Mode requires a clear audio environment. Background noise may trigger false interruptions. Adjust your microphone sensitivity in Settings if needed.
+</Warning>
+
+## Advanced features
+
+### Attach PDF documents
+
+1. Click the **📎 Attach button**
+2. Select a PDF file from your computer
+3. Review the confirmation dialog showing:
+   - Total tokens in the document
+   - Current context usage
+   - Whether it fits in the model's context window
+4. Click **Inject** to add it to the conversation
+
+The AI can now answer questions about the document:
+
+```
+You: What are the main findings in section 3?
+```
+
+<Note>
+PDF text is extracted with PyMuPDF and injected directly into the conversation history. No vector database or RAG pipeline required.
+</Note>
+
+### Reading practice mode
+
+Click the **📖 Practice button** to enter shadowing coach mode:
+
+1. Paste or type text you want to practice reading
+2. Click **Start**
+3. Read aloud while the app listens
+4. Watch each word change color:
+   - **Green** = pronounced correctly
+   - **Red** = mispronounced
+   - **Gray** = not yet read
+5. Click any word to hear its pronunciation via TTS
+6. When finished, see your grade (A+ → F) and accuracy stats
+
+### Adjust settings
+
+Click the **⚙️ Settings button** to customize:
+
+- **Language**: Switch between English and Spanish (affects STT and TTS)
+- **Voice speed**: 0.5× to 2.0× playback speed
+- **Font size**: Adjust chat text size
+- **Audio devices**: Select input/output devices
+- **Recording mode**: Auto-send or manual control
+- **Whisper model**: Choose between base, small, medium, or large-v3
+
+<Warning>
+Changing the Whisper model requires a restart. The app will offer to restart immediately when you change this setting.
+</Warning>
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| **Enter** | Send message |
+| **Shift+Enter** | New line in text input |
+| **Esc** | (In Live Mode) Mute/unmute |
+
+## Understanding the reasoning panel
+
+When using thinking-capable models (like those with extended reasoning), you'll see a **✨ Show Reasoning** button below AI responses.
+
+Click to expand and see the model's internal thought process:
+- Appears automatically when the model uses `<think>` tags
+- Shows reasoning in italic gray text
+- Collapsed by default to keep the UI clean
+
+<Info>
+The reasoning panel only appears if your model supports structured thinking. Models without this capability will work normally without showing the panel.
+</Info>
+
+## Tips for better conversations
+
+1. **Start specific**: Clear, specific prompts get better responses
+   - Good: "Explain quicksort in Python with examples"
+   - Poor: "Tell me about sorting"
+
+2. **Watch context usage**: Keep an eye on the context donut
+   - Start a new chat when approaching 80-90%
+   - Long documents consume significant context
+
+3. **Use the right model**: Smaller models are faster but less capable
+   - `llama3.1:8b` - Good all-rounder
+   - `mistral:7b` - Faster for simple tasks
+   - Larger models for complex reasoning
+
+4. **Optimize voice settings**:
+   - Use `base` Whisper for speed, `medium` or `large-v3` for accuracy
+   - Adjust voice speed if TTS is too fast/slow
+   - Test different voices to find your preference
+
+5. **Leverage markdown**: The AI can format responses with:
+   - Code blocks with syntax highlighting
+   - Tables for structured data
+   - Headers, lists, and emphasis
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Configuration" icon="gear" href="/configuration/settings">
+    Dive deeper into settings and customization options
+  </Card>
+  
+  <Card title="Architecture" icon="code" href="/advanced/architecture">
+    Learn about ChatbotAI-Free's internal architecture
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

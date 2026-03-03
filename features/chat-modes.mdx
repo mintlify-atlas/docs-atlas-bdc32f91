@@ -1,0 +1,169 @@
+---
+title: "Chat Modes"
+description: "Two conversation modes: Classic Chat for thoughtful interactions, Live Mode for hands-free dialogue"
+---
+
+## Overview
+
+ChatbotAI-Free offers two distinct conversation modes, each optimized for different use cases:
+
+- **Classic Chat Mode** — Turn-by-turn conversations with full markdown rendering and streaming responses
+- **Live Mode** — Continuous hands-free conversation with barge-in detection
+
+---
+
+## Classic Chat Mode
+
+The default mode for deliberate, thoughtful conversations.
+
+### How It Works
+
+<Steps>
+  <Step title="Record your message">
+    Click the 🎤 **Mic button** to start recording. Speak your message, then click the mic button again to send.
+    
+    <Info>
+      You can enable **auto-send** in Settings to automatically send your message when you stop speaking (detected via Voice Activity Detection).
+    </Info>
+  </Step>
+  
+  <Step title="View transcription">
+    Your speech is transcribed using **faster-whisper** (multilingual STT) and displayed in a user bubble aligned to the right.
+  </Step>
+  
+  <Step title="See the AI response">
+    The AI generates a streaming response displayed with:
+    - **Markdown formatting** (headings, bold, italic, code blocks, tables)
+    - **Live text updates** as each token arrives
+    - **Collapsible reasoning panel** (for thinking-capable models like DeepSeek R1)
+    - **TTS playback** starting as soon as the first sentence is ready
+  </Step>
+</Steps>
+
+### Key Features
+
+**Markdown Rendering**
+
+All bot responses are rendered with full GitHub-flavored markdown support:
+- Headers (`#`, `##`, `###`, `####`)
+- **Bold** and *italic* text
+- `Inline code` and multi-line code blocks with syntax highlighting
+- Tables with alternating row colors
+- Horizontal rules
+
+**Streaming Responses**
+
+Tokens stream in real-time from your Ollama model. The UI updates instantly, and TTS generation runs in parallel — audio playback begins before the full response completes.
+
+**Reasoning Panel**
+
+Thinking-capable models (like DeepSeek R1) show their reasoning in a collapsible panel:
+- Hidden by default (toggle with **✨ Show Reasoning ▾**)
+- Streams reasoning tokens in real-time
+- Italic gray text to distinguish from the final answer
+
+**Context Window Indicator**
+
+The **context donut** (bottom-right corner) shows how much of your model's context window is used:
+- Click it to see details: `used_tokens / total_tokens (percentage)`
+- Color-coded: 🟢 Green (under 50%), 🟡 Yellow (50-80%), 🔴 Red (over 80%)
+
+---
+
+## Live Mode
+
+Hands-free continuous conversation mode with natural interruption support.
+
+### How It Works
+
+<Steps>
+  <Step title="Enter Live Mode">
+    Click the **✨ Live** button in the main window. The status changes to **"listening"**.
+  </Step>
+  
+  <Step title="Speak naturally">
+    Just start talking. Voice Activity Detection (VAD) automatically captures your speech and stops when you pause for 1.5 seconds.
+    
+    <Note>
+      Live Mode uses a higher VAD threshold to avoid triggering on background noise.
+    </Note>
+  </Step>
+  
+  <Step title="AI responds immediately">
+    Your speech is transcribed and sent to the AI. The response starts playing as soon as the first sentence is ready.
+  </Step>
+  
+  <Step title="Interrupt anytime (barge-in)">
+    Start speaking while the AI is talking to **interrupt immediately**. The AI stops mid-sentence, and the conversation resumes from your new input.
+    
+    <Info>
+      Barge-in detection runs continuously in a background thread, monitoring audio levels every 30ms for ultra-responsive interruptions.
+    </Info>
+  </Step>
+</Steps>
+
+### Barge-In Detection
+
+Live Mode continuously monitors your microphone even while the AI is speaking. When you start talking:
+
+1. **Detection threshold**: RMS audio level > 2× the normal silence threshold
+2. **Consecutive frames**: Requires 4 consecutive frames (120ms) to confirm speech
+3. **Instant stop**: Audio playback terminates immediately via `player.stop()`
+4. **Resume listening**: The mode loops back to listening for your next input
+
+<Warning>
+  Live Mode does **not** display transcriptions or responses in the chat history UI. It's designed for fluid, voice-only interaction. Use Classic Chat if you need written records.
+</Warning>
+
+### Mute Toggle
+
+While in Live Mode, you can **mute** the microphone:
+- The status changes to **"muted"**
+- No new user input is processed
+- The AI can finish speaking if a response is already in progress
+
+---
+
+## When to Use Each Mode
+
+<Tabs>
+  <Tab title="Classic Chat">
+    **Best for:**
+    - Reading and referencing AI responses
+    - Complex queries requiring markdown formatting
+    - Conversations with PDF documents
+    - Debugging code or reviewing tables
+    - Saving chat history for later review
+    
+    **UI Controls:**
+    - 🎤 Mic button (tap to record, tap to send)
+    - ⏹ Stop button (interrupt AI response)
+    - Context donut (click for usage stats)
+  </Tab>
+  
+  <Tab title="Live Mode">
+    **Best for:**
+    - Rapid back-and-forth dialogue
+    - Hands-free operation (e.g., while cooking or exercising)
+    - Practicing a foreign language
+    - Voice-only workflows
+    - Natural conversational flow
+    
+    **UI Controls:**
+    - ✨ Live button (toggle on/off)
+    - Mute toggle (pause mic input)
+    - Status indicator (listening / thinking / speaking / muted)
+  </Tab>
+</Tabs>
+
+---
+
+## Keyboard Shortcuts
+
+In Classic Chat mode, you can also type messages using the text input field:
+- **Enter** — Send message
+- **Shift+Enter** — New line (multi-line input)
+
+<Info>
+  Text messages skip transcription and go directly to the AI, useful for pasting code or precise queries.
+</Info>

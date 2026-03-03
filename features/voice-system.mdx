@@ -1,0 +1,316 @@
+---
+title: "Voice System"
+description: "Real-time speech recognition, neural TTS, and Voice Activity Detection for seamless voice interaction"
+---
+
+## Overview
+
+ChatbotAI-Free features a **fully offline voice pipeline** powered by state-of-the-art neural models:
+
+- **Speech-to-Text (STT)**: faster-whisper with multilingual support
+- **Text-to-Speech (TTS)**: Kokoro neural TTS (English + Spanish) + optional Sherpa-ONNX voices
+- **Voice Activity Detection (VAD)**: Real-time silence/speech detection
+- **Audio Playback**: PipeWire-native output via `paplay`
+
+---
+
+## Speech-to-Text (STT)
+
+### faster-whisper Engine
+
+ChatbotAI-Free uses [faster-whisper](https://github.com/guillaumekln/faster-whisper), a highly optimized implementation of OpenAI's Whisper model.
+
+**Key Features:**
+- **GPU acceleration** (CUDA) for fast transcription
+- **Multilingual support** (English, Spanish, and 90+ languages)
+- **VAD filtering** built-in for accurate end-of-speech detection
+- **Hallucination filtering** to remove common artifacts
+
+### Model Selection
+
+Choose your STT quality/speed trade-off from **Settings**:
+
+| Model | Size | Speed | Accuracy | Best For |
+|-------|------|-------|----------|----------|
+| **base** | ~140 MB | Fastest | Good | Testing, low-end hardware |
+| **small** | ~460 MB | Fast | Better | Balanced performance |
+| **medium** | ~1.5 GB | Moderate | Great | High accuracy |
+| **large-v3** | ~2.9 GB | Slow | Best | Production, critical accuracy |
+
+<Info>
+  The model change takes effect after restarting the app. The app will offer to restart immediately after you change the model.
+</Info>
+
+### Language Support
+
+The STT system automatically uses the language selected in **Settings**:
+- **English** → Whisper transcribes with `language="en"`
+- **Spanish** → Whisper transcribes with `language="es"`
+
+<Warning>
+  ChatbotAI-Free always loads the **multilingual** Whisper models (not `.en` variants). The `.en` models only understand English.
+</Warning>
+
+### Transcription Pipeline
+
+When you speak:
+
+<Steps>
+  <Step title="Audio capture">
+    Microphone records at the device's native sample rate (e.g., 48kHz) using `sounddevice`.
+  </Step>
+  
+  <Step title="Resampling">
+    Audio is resampled to **16kHz** (Whisper's required input format) using linear interpolation.
+    
+    ```python
+    # From audio_utils.py:166-170
+    new_length = int(len(audio_data) * 16000 / record_rate)
+    old_idx = np.arange(len(audio_data))
+    new_idx = np.linspace(0, len(audio_data) - 1, new_length)
+    audio_data = np.interp(new_idx, old_idx, audio_data)
+    ```
+  </Step>
+  
+  <Step title="Whisper inference">
+    faster-whisper transcribes with:
+    - `beam_size=5`, `best_of=5` (high quality)
+    - `vad_filter=True` (remove non-speech)
+    - `no_speech_threshold=0.6` (filter silence)
+    - `condition_on_previous_text=False` (prevent hallucinations)
+  </Step>
+  
+  <Step title="Post-processing">
+    Common hallucinations are filtered out:
+    - English: "thank you", "subscribe", "bye", etc.
+    - Spanish: "gracias", "suscríbete", "adiós", etc.
+    
+    Text shorter than 2 characters is discarded.
+  </Step>
+</Steps>
+
+---
+
+## Text-to-Speech (TTS)
+
+### Kokoro TTS Engine
+
+The primary TTS engine is [Kokoro ONNX v1.0](https://github.com/thewh1teagle/kokoro-onnx), a high-quality neural voice model.
+
+**Features:**
+- **54 voices** (English + Spanish) in a single 300MB model
+- **GPU acceleration** (ONNX Runtime)
+- **Real-time synthesis** with low latency
+- **Adjustable speed** (0.5× to 2.0×)
+- **Multilingual**: English (`en-us`) and Spanish (`es`) language codes
+
+### Voice Selection
+
+Voices are prefixed by language and gender:
+- **English voices**: `af_bella`, `af_sarah`, `am_michael`, `bf_emma`, etc.
+- **Spanish voices**: `ef_dora`, `em_carlos`, etc.
+
+Select voices from the top dropdown in the main window. The app automatically uses the correct language code based on your Settings.
+
+### Sherpa-ONNX Voice Packs (Optional)
+
+You can add **external voices** in other languages using [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx) VITS models.
+
+<Steps>
+  <Step title="Install Sherpa-ONNX">
+    ```bash
+    pip install sherpa-onnx
+    ```
+  </Step>
+  
+  <Step title="Download a voice pack">
+    Browse [Hugging Face VITS models](https://huggingface.co/csukuangfj). Download:
+    - The `.onnx` model file
+    - `tokens.txt`
+    - The `espeak-ng-data/` directory
+  </Step>
+  
+  <Step title="Place in voices/ folder">
+    Drop the folder directly inside `voices/` (not nested):
+    
+    ```
+    voices/
+    ├── kokoro-v1.0/
+    └── vits-piper-es_AR-daniela-high/  ← new Sherpa voice
+        ├── es_AR-daniela-high.onnx
+        ├── tokens.txt
+        └── espeak-ng-data/
+    ```
+  </Step>
+  
+  <Step title="Restart the app">
+    The **voice scanner** detects the new folder and asks which language to assign it to. After confirmation, the voice appears in the dropdown.
+  </Step>
+</Steps>
+
+<Info>
+  Sherpa voices are identified by **folder names containing hyphens** (e.g., `vits-piper-es_AR-daniela-high`). Kokoro voices have **short names without hyphens** (e.g., `af_bella`).
+</Info>
+
+### TTS Synthesis Pipeline
+
+When the AI generates a response:
+
+<Steps>
+  <Step title="Sentence segmentation">
+    The streaming LLM response is split into sentences (delimited by `.`, `!`, `?`, `\n`).
+  </Step>
+  
+  <Step title="Markdown cleaning">
+    Markdown symbols (`*`, `**`, `#`, etc.) and emojis are removed before TTS:
+    
+    ```python
+    # From main.py:307-348
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italic*
+    text = emoji_pattern.sub('', text)            # remove emojis
+    ```
+  </Step>
+  
+  <Step title="Parallel TTS generation">
+    Each sentence is synthesized in a background thread while the LLM continues streaming. Audio is queued for playback.
+  </Step>
+  
+  <Step title="Speed adjustment">
+    The user-defined speed multiplier (from Settings) is applied during synthesis:
+    
+    ```python
+    # From ai_manager.py:456
+    samples, sample_rate = self.tts_manager.create(text, speed=speed)
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Voice Activity Detection (VAD)
+
+### How It Works
+
+VAD monitors audio energy in real-time to detect speech and silence.
+
+**Algorithm:**
+1. **RMS calculation**: Root Mean Square of each audio chunk
+   ```python
+   rms = np.sqrt(np.mean(audio_chunk ** 2))
+   ```
+2. **Threshold comparison**: If `rms > silence_threshold`, speech is detected
+3. **Silence counter**: Consecutive silent frames are counted
+4. **End-of-speech**: Stop recording after 1.5 seconds of silence
+
+**Parameters** (from `audio_utils.py:16`):
+- `silence_threshold = 0.03` (RMS level)
+- `silence_duration = 3.0` seconds (Classic Chat)
+- `silence_duration = 1.5` seconds (Live Mode)
+- `min_audio_duration = 1.0` seconds (minimum valid recording)
+
+### Barge-In Detection (Live Mode Only)
+
+Live Mode runs a **continuous monitoring thread** even while the AI is speaking:
+
+```python
+# From main.py:1198-1237
+speech_threshold = self.recorder.silence_threshold * 2.0
+consecutive_speech_frames = 0
+frames_needed = 4  # 4 frames = ~120ms
+
+while self.is_running:
+    if rms > speech_threshold:
+        consecutive_speech_frames += 1
+        if consecutive_speech_frames >= frames_needed:
+            self.user_speaking.set()  # Signal interruption
+```
+
+**When triggered:**
+- Audio playback stops immediately (`player.stop()`)
+- TTS queue is cleared
+- Mode loops back to listening
+
+---
+
+## Audio Playback
+
+### PipeWire Integration
+
+ChatbotAI-Free uses **PipeWire** for audio playback via the `paplay` command (from PulseAudio compatibility layer).
+
+**Why PipeWire?**
+- **Non-blocking**: TTS never locks the audio device
+- **Mixing**: Other apps (YouTube, Spotify) play simultaneously without conflict
+- **Low latency**: Instant playback start
+
+### Playback Pipeline
+
+<Steps>
+  <Step title="TTS output">
+    Neural TTS generates float32 audio samples (24kHz for Kokoro, varies for Sherpa).
+  </Step>
+  
+  <Step title="Normalization">
+    Samples are normalized to [-1.0, 1.0] range, then converted to int16 for WAV format.
+    
+    ```python
+    # From audio_utils.py:218-225
+    max_val = np.abs(audio_data).max()
+    if max_val > 1.0:
+        audio_data = audio_data / max_val
+    audio_int16 = (audio_data * 32767.0).astype(np.int16)
+    ```
+  </Step>
+  
+  <Step title="Temporary WAV file">
+    Audio is written to a temporary `.wav` file using Python's `wave` module.
+  </Step>
+  
+  <Step title="paplay spawning">
+    A subprocess runs `paplay temp.wav`. PipeWire handles mixing and routing.
+    
+    ```python
+    # From audio_utils.py:241-245
+    subprocess.Popen(['paplay', tmp_path],
+                     stdout=subprocess.DEVNULL,
+                     stderr=subprocess.PIPE)
+    ```
+  </Step>
+  
+  <Step title="Cleanup">
+    The temporary file is deleted after playback completes or is interrupted.
+  </Step>
+</Steps>
+
+<Note>
+  If `paplay` is not installed, the app falls back to `sounddevice.play()` (direct ALSA/JACK output).
+</Note>
+
+---
+
+## Configuration
+
+### Settings Panel (⚙️)
+
+Adjust voice system parameters:
+
+**STT Settings:**
+- **Whisper Model**: base / small / medium / large-v3
+- **Language**: English / Spanish
+
+**TTS Settings:**
+- **Voice**: Select from Kokoro + Sherpa voices
+- **Voice Speed**: 0.5× to 2.0× (slider)
+
+**Audio Devices:**
+- **Input Device**: Select microphone
+- **Output Device**: Select speaker (info only; paplay uses system default)
+
+**Recording Mode:**
+- **Auto-send**: Automatically send after silence detected
+- **Manual**: Tap mic twice (record → send)
+
+<Info>
+  Changes to Whisper model require an app restart. Other settings take effect immediately.
+</Info>

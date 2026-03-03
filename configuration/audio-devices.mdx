@@ -1,0 +1,298 @@
+---
+title: 'Audio Devices'
+description: 'Configure input and output devices, troubleshoot audio issues, and understand PipeWire integration'
+---
+
+ChatbotAI-Free uses the sounddevice library for audio input and PipeWire (via paplay) for output to prevent device conflicts.
+
+## Input Device Selection
+
+Choose which microphone or audio input device to use for voice recording.
+
+<Steps>
+  <Step title="Open Settings">
+    Click ⚙️ Settings to open the settings panel
+  </Step>
+  
+  <Step title="Select input device">
+    Choose your microphone from the "Input Device" dropdown
+    
+    The list shows all available input devices detected by sounddevice
+  </Step>
+  
+  <Step title="Default option">
+    Select "System Default" (index `-1`) to use your OS's default microphone
+  </Step>
+</Steps>
+
+### Input Device Configuration
+
+From `preferences.py:37`:
+
+```python
+"input_device": -1,  # Audio input device index (-1 = system default)
+```
+
+The selected device is passed to the AudioRecorder (see `audio_utils.py:16`):
+
+```python
+class AudioRecorder:
+    def __init__(self, sample_rate=16000, silence_threshold=0.03, 
+                 silence_duration=3.0, min_audio_duration=1.0, device=None):
+        self.device = device  # None uses system default
+```
+
+## Output Device Selection
+
+Choose which speakers or audio output device to use for TTS playback.
+
+<Steps>
+  <Step title="Open Settings">
+    Click ⚙️ Settings to open the settings panel
+  </Step>
+  
+  <Step title="Select output device">
+    Choose your speakers from the "Output Device" dropdown
+  </Step>
+  
+  <Step title="Default option">
+    Select "System Default" (index `-1`) to use your OS's default output
+  </Step>
+</Steps>
+
+<Note>
+The output device selection is primarily informational. ChatbotAI-Free uses PipeWire (via paplay) for playback, which automatically handles device routing and mixing.
+</Note>
+
+### Output Device Configuration
+
+From `preferences.py:36`:
+
+```python
+"output_device": -1,  # Audio output device index (-1 = system default)
+```
+
+## PipeWire Integration
+
+ChatbotAI-Free uses **PipeWire** for audio output to avoid exclusive ALSA device locking and enable simultaneous playback with other apps (YouTube, music players, etc.).
+
+### How PipeWire Playback Works
+
+From `audio_utils.py:183-291`:
+
+<Steps>
+  <Step title="Create temporary WAV file">
+    Convert the TTS audio to int16 PCM and write to a temporary WAV file
+    ```python
+    audio_int16 = (audio_data * 32767.0).clip(-32768, 32767).astype(np.int16)
+    fd, tmp_path = tempfile.mkstemp(suffix='.wav')
+    ```
+  </Step>
+  
+  <Step title="Spawn paplay process">
+    Use PipeWire's `paplay` command to play the audio
+    ```python
+    self._paplay_proc = subprocess.Popen(
+        ['paplay', tmp_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    ```
+  </Step>
+  
+  <Step title="Wait for completion">
+    Monitor the process and support interruption (Stop button)
+  </Step>
+  
+  <Step title="Cleanup">
+    Remove the temporary WAV file after playback
+  </Step>
+</Steps>
+
+### Fallback to sounddevice
+
+If `paplay` is not installed, the app automatically falls back to sounddevice:
+
+```python
+except FileNotFoundError:
+    print("paplay not found, falling back to sounddevice")
+    sd.play(audio_data, actual_rate)
+    while sd.get_stream().active and not self.should_stop:
+        time.sleep(0.05)
+```
+
+<Warning>
+The sounddevice fallback may cause device conflicts if another app is using the same audio output. Install PipeWire and paplay for best results.
+</Warning>
+
+## Sample Rate Settings
+
+ChatbotAI-Free uses different sample rates for different stages of audio processing:
+
+### Input (Speech Recognition)
+
+- **Target sample rate**: 16000 Hz (optimized for Whisper STT)
+- **Automatic resampling**: If your microphone's native rate differs, audio is resampled
+
+From `audio_utils.py:56-63`:
+
+```python
+dev_info = sd.query_devices(self.device, 'input')
+native_rate = int(dev_info['default_samplerate'])
+self._record_rate = native_rate
+if native_rate != self.sample_rate:
+    print(f"Microphone native rate {native_rate}Hz → will resample to {self.sample_rate}Hz for STT")
+```
+
+Resampling is performed after recording (see `audio_utils.py:165-170`):
+
+```python
+if self._record_rate != self.sample_rate:
+    new_length = int(len(audio_data) * self.sample_rate / self._record_rate)
+    old_idx = np.arange(len(audio_data))
+    new_idx = np.linspace(0, len(audio_data) - 1, new_length)
+    audio_data = np.interp(new_idx, old_idx, audio_data).astype(np.float32)
+```
+
+### Output (TTS Playback)
+
+- **Kokoro TTS**: 24000 Hz
+- **Sherpa-ONNX**: 22050 Hz (most Piper models)
+
+Each TTS engine returns its own sample rate along with audio data:
+
+```python
+samples, sample_rate = self.tts_manager.create(text, speed=speed)
+```
+
+## Troubleshooting Audio Issues
+
+### No microphone detected
+
+<Accordion title="Check device permissions">
+  Ensure your OS has granted microphone access to the Python process. On Linux, check PipeWire/PulseAudio permissions.
+</Accordion>
+
+<Accordion title="List available devices">
+  Run this Python snippet to see all detected devices:
+  ```python
+  import sounddevice as sd
+  print(sd.query_devices())
+  ```
+  Look for devices with `max_input_channels > 0`.
+</Accordion>
+
+### Audio cuts out or stutters
+
+<Accordion title="Increase buffer size">
+  The default blocksize is 1024 samples. For some devices, increasing to 2048 may help:
+  
+  Edit `audio_utils.py:70`:
+  ```python
+  blocksize=2048,  # was 1024
+  ```
+</Accordion>
+
+<Accordion title="Check CPU usage">
+  If your CPU is overloaded, try:
+  - Using a smaller Whisper model (`base` instead of `large-v3`)
+  - Closing other applications
+  - Disabling GPU acceleration if it's causing thermal throttling
+</Accordion>
+
+### TTS playback conflicts with other apps
+
+<Accordion title="Install PipeWire and paplay">
+  This is the most common cause. Install PipeWire audio:
+  
+  **Ubuntu/Debian**:
+  ```bash
+  sudo apt install pipewire pipewire-pulse
+  ```
+  
+  **Fedora**:
+  ```bash
+  sudo dnf install pipewire pipewire-pulseaudio
+  ```
+  
+  **Arch Linux**:
+  ```bash
+  sudo pacman -S pipewire pipewire-pulse
+  ```
+</Accordion>
+
+<Accordion title="Check paplay installation">
+  Verify paplay is available:
+  ```bash
+  which paplay
+  ```
+  
+  If not found, the app will fall back to sounddevice, which may lock the audio device.
+</Accordion>
+
+### Recording picks up TTS output (feedback loop)
+
+<Accordion title="Use headphones">
+  The simplest solution is to wear headphones so the microphone doesn't pick up speaker output.
+</Accordion>
+
+<Accordion title="Automatic pause during playback">
+  ChatbotAI-Free automatically pauses recording while TTS is playing (see `audio_utils.py:85-98`):
+  
+  ```python
+  def pause_recording(self):
+      self.is_paused = True
+      print("Recording paused")
+  
+  def resume_recording(self):
+      self.is_paused = False
+      # Clear any accumulated audio during pause
+      while not self.audio_queue.empty():
+          self.audio_queue.get_nowait()
+  ```
+</Accordion>
+
+### Voice Activity Detection too sensitive
+
+<Accordion title="Adjust silence threshold">
+  The default RMS threshold is `0.03` to filter background noise. If it's too sensitive:
+  
+  Edit `audio_utils.py:21`:
+  ```python
+  silence_threshold=0.05,  # was 0.03 (higher = less sensitive)
+  ```
+</Accordion>
+
+<Accordion title="Adjust silence duration">
+  The default is 3 seconds of silence before stopping. To make it shorter or longer:
+  
+  Edit `audio_utils.py:27`:
+  ```python
+  silence_duration=2.0,  # was 3.0 (shorter = faster cutoff)
+  ```
+</Accordion>
+
+## Audio Quality Settings
+
+### Recording Quality
+
+- **Format**: float32 PCM
+- **Channels**: Mono (1 channel)
+- **Sample rate**: 16000 Hz (after resampling)
+- **Bit depth**: 32-bit float during processing
+
+### Playback Quality
+
+- **Format**: int16 PCM (for WAV file compatibility)
+- **Channels**: Mono (1 channel)  
+- **Sample rate**: 22050 Hz (Sherpa) or 24000 Hz (Kokoro)
+- **Bit depth**: 16-bit for file output
+
+Audio is normalized before playback to prevent clipping:
+
+```python
+# From audio_utils.py:220-222
+max_val = np.abs(audio_data).max()
+if max_val > 1.0:
+    audio_data = audio_data / max_val
+```

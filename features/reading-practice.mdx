@@ -1,0 +1,369 @@
+---
+title: "Reading Practice Mode"
+description: "Shadowing coach with real-time pronunciation feedback and word-by-word accuracy tracking"
+---
+
+## Overview
+
+Reading Practice Mode (Shadowing Coach) helps you improve pronunciation and fluency by reading text aloud. The app listens in real-time via **VAD + Whisper**, tracks which words you say correctly, and gives you a **grade (A+ to F)** with detailed feedback.
+
+---
+
+## How to Use
+
+<Steps>
+  <Step title="Enter Practice Mode">
+    Click the **📖 Practice** button in the main window. A new dialog opens.
+  </Step>
+  
+  <Step title="Add text to practice">
+    Paste or type the text you want to read. This can be:
+    - A paragraph from a book or article
+    - Vocabulary words or phrases
+    - Tongue twisters or pronunciation drills
+    - Any text in your selected language (English or Spanish)
+  </Step>
+  
+  <Step title="Start reading">
+    Click **Start**. The app begins listening via your microphone. Read the text aloud at your own pace.
+  </Step>
+  
+  <Step title="See real-time feedback">
+    As you speak, **words change color**:
+    - 🟢 **Green**: Correctly pronounced
+    - 🔴 **Red**: Mispronounced or skipped
+    - ⚪ **Grey**: Not yet read
+    
+    <Info>
+      The app uses **fuzzy matching** (Levenshtein distance) to tolerate minor variations in pronunciation.
+    </Info>
+  </Step>
+  
+  <Step title="Click words to hear pronunciation">
+    Click any word to hear its **correct pronunciation** via TTS. This is useful for:
+    - Learning unfamiliar words
+    - Comparing your pronunciation to the AI's
+    - Practicing specific sounds
+  </Step>
+  
+  <Step title="Finish and get graded">
+    Click **Stop** when you're done. A feedback dialog appears with:
+    - **Grade** (A+, A, B, C, D, or F)
+    - **Accuracy percentage** and visual progress bar
+    - **Per-word stats**: X words spoken, Y correct, Z missed
+    - **List of missed words** with counts
+  </Step>
+</Steps>
+
+---
+
+## Real-Time Word Tracking
+
+### How It Works
+
+<Steps>
+  <Step title="Text tokenization">
+    The practice text is split into individual words (whitespace-separated, punctuation removed).
+  </Step>
+  
+  <Step title="Continuous listening">
+    VAD monitors your microphone. When speech is detected, Whisper transcribes it.
+  </Step>
+  
+  <Step title="Word matching">
+    Each transcribed word is compared to the practice text using **fuzzy matching**:
+    - **Exact match** → Green (correct)
+    - **Levenshtein distance ≤ 2** → Green (close enough)
+    - **No match** → Red (mispronounced or skipped)
+  </Step>
+  
+  <Step title="UI update">
+    The corresponding word in the text turns green or red. Grey words remain unread.
+  </Step>
+</Steps>
+
+### Color-Coding Logic
+
+| Color | Meaning | Condition |
+|-------|---------|----------|
+| 🟢 **Green** | Correct | Word matches expected text (exact or fuzzy) |
+| 🔴 **Red** | Incorrect | Word does not match (mispronounced, skipped, or wrong word) |
+| ⚪ **Grey** | Not read | Word has not been spoken yet |
+
+**Fuzzy matching algorithm:**
+```python
+from difflib import SequenceMatcher
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio() > 0.7
+```
+
+This tolerates:
+- Minor pronunciation variations ("the" vs "thuh")
+- Pluralization ("cat" vs "cats")
+- Verb tenses ("run" vs "running")
+
+<Note>
+  Whisper may transcribe phonetically similar words incorrectly (e.g., "there" vs "their"). The fuzzy matcher helps, but isn't perfect.
+</Note>
+
+---
+
+## Pronunciation Playback
+
+### Click to Hear
+
+You can click any word in the practice text to hear its pronunciation via TTS.
+
+**How it works:**
+1. Click a word → App extracts the word text
+2. TTS synthesizes the word using your selected voice
+3. Audio plays via PipeWire (`paplay`)
+
+**Use cases:**
+- **Learn new words**: Hear how to pronounce unfamiliar vocabulary
+- **Compare**: Say the word, then click it to compare your pronunciation
+- **Practice**: Repeat-click to drill a specific word
+
+<Info>
+  Pronunciation playback uses the **current language and voice** from Settings. Switch to Spanish to hear Spanish words pronounced correctly.
+</Info>
+
+---
+
+## Grading System
+
+### Accuracy Calculation
+
+When you click **Stop**, the app calculates:
+
+```python
+total_words = len(practice_text.split())
+correct_words = count_green_words()
+accuracy = (correct_words / total_words) * 100
+```
+
+### Grade Mapping
+
+| Grade | Accuracy Range | Meaning |
+|-------|----------------|----------|
+| **A+** | 95-100% | Perfect or near-perfect |
+| **A** | 85-94% | Excellent |
+| **B** | 75-84% | Good |
+| **C** | 65-74% | Adequate |
+| **D** | 50-64% | Needs improvement |
+| **F** | 0-49% | Significant practice needed |
+
+### Feedback Dialog
+
+The feedback dialog shows:
+
+**1. Grade and accuracy**
+```
+🎯 Grade: A
+📊 Accuracy: 87.5%
+```
+
+**2. Visual progress bar**
+```
+████████████████░░░░  87.5%
+```
+
+**3. Word statistics**
+```
+📝 Words spoken: 40
+✅ Correct: 35
+❌ Missed: 5
+```
+
+**4. Missed words list**
+```
+Words you missed:
+- pronunciation (2 times)
+- especially (1 time)
+- algorithm (2 times)
+```
+
+<Accordion title="Example Feedback">
+  **Practice text**: "The quick brown fox jumps over the lazy dog. This is a classic pangram used for typing practice."
+  
+  **Your reading**: "The quick brown fox jumps over the lazy dog. This is a classic pang... panagram used for typing practice."
+  
+  **Feedback:**
+  - **Grade**: A-
+  - **Accuracy**: 93.3% (14/15 words correct)
+  - **Missed words**:
+    - pangram (1 time) — you said "pang" and "panagram" (mispronounced)
+</Accordion>
+
+---
+
+## Advanced Features
+
+### VAD Sensitivity
+
+Reading Practice Mode uses **Voice Activity Detection** to segment your speech.
+
+**Parameters:**
+- `silence_threshold = 0.03` (RMS level)
+- `silence_duration = 1.5 seconds` (pause before stopping)
+
+If you speak too quickly, VAD may cut off mid-sentence. **Speak at a moderate pace** with natural pauses.
+
+### Multi-Language Support
+
+The mode works in **English** and **Spanish** (based on your Settings language).
+
+**How it adapts:**
+- **STT**: Whisper transcribes with `language="en"` or `language="es"`
+- **TTS**: Kokoro uses `lang="en-us"` or `lang="es"` for pronunciation playback
+- **Fuzzy matching**: Works identically in both languages
+
+<Warning>
+  Make sure your **Settings language** matches your practice text. Reading English text with Spanish STT (or vice versa) will produce poor results.
+</Warning>
+
+### Real-Time vs Batch Processing
+
+Reading Practice Mode processes speech **in real-time** as you speak, not in batch at the end.
+
+**Advantages:**
+- Instant visual feedback
+- Encourages continuous reading flow
+- Helps you notice mistakes immediately
+
+**Limitations:**
+- Whisper must transcribe each utterance quickly (faster models recommended)
+- Network-dependent models (cloud STT) would add latency (not used here)
+
+---
+
+## Tips for Best Results
+
+<Tabs>
+  <Tab title="Text Selection">
+    **Choose appropriate text:**
+    - Start with **short paragraphs** (50-100 words)
+    - Use **clear, simple sentences** for beginners
+    - Try **tongue twisters** for advanced pronunciation drills
+    - Avoid **heavily technical jargon** (Whisper may struggle)
+  </Tab>
+  
+  <Tab title="Reading Technique">
+    **How to read:**
+    - Speak **clearly and at moderate pace** (not too fast)
+    - **Pause naturally** at punctuation (helps VAD segment speech)
+    - **Repeat mispronounced words** immediately (the app updates in real-time)
+    - Use **headphones** to avoid feedback loops
+  </Tab>
+  
+  <Tab title="Microphone Setup">
+    **Hardware tips:**
+    - Use a **quality microphone** (headset or desktop mic)
+    - Minimize **background noise** (close windows, turn off fans)
+    - Position mic **6-12 inches** from your mouth
+    - Check **Settings → Input Device** to select the correct mic
+  </Tab>
+  
+  <Tab title="Troubleshooting">
+    **If words aren't being recognized:**
+    - Speak **louder** (check VAD threshold in code if needed)
+    - **Enunciate** more clearly
+    - Verify **language setting** matches your text
+    - Try a **better Whisper model** (small → medium → large)
+  </Tab>
+</Tabs>
+
+---
+
+## Use Cases
+
+### Language Learning
+
+**Scenario**: You're learning Spanish and want to practice reading comprehension passages.
+
+**Workflow**:
+1. Paste a Spanish paragraph into Reading Practice Mode
+2. Read it aloud, seeing which words you pronounce correctly
+3. Click red words to hear correct pronunciation
+4. Re-read until you achieve 95%+ accuracy
+
+### Accent Reduction
+
+**Scenario**: You want to reduce your accent in English.
+
+**Workflow**:
+1. Use a passage with **challenging phonemes** (e.g., "th" sounds, "r" vs "l")
+2. Read aloud and identify red words (mispronounced)
+3. Click each red word to hear native pronunciation
+4. Practice those words separately, then re-read the full passage
+
+### Speech Therapy
+
+**Scenario**: A speech therapist assigns reading exercises.
+
+**Workflow**:
+1. Patient reads assigned text aloud
+2. App tracks which words are difficult (consistently red)
+3. Therapist reviews missed words list
+4. Patient practices specific problem words using click-to-hear
+
+### Audition Prep
+
+**Scenario**: Actor preparing for a role needs to nail specific lines.
+
+**Workflow**:
+1. Paste script lines into Reading Practice Mode
+2. Read lines aloud, ensuring 100% accuracy
+3. Use click-to-hear for unfamiliar words (character names, places)
+4. Practice until achieving A+ grade consistently
+
+---
+
+## Technical Details
+
+### Word Matching Algorithm
+
+The app uses **Levenshtein distance** (edit distance) to determine if a spoken word matches the expected text:
+
+```python
+from difflib import SequenceMatcher
+
+def word_similarity(word1, word2):
+    # Normalize: lowercase, strip punctuation
+    w1 = word1.lower().strip('.,!?;:')
+    w2 = word2.lower().strip('.,!?;:')
+    
+    # Exact match
+    if w1 == w2:
+        return True
+    
+    # Fuzzy match (70% similarity threshold)
+    return SequenceMatcher(None, w1, w2).ratio() > 0.7
+```
+
+**Threshold tuning**:
+- `0.7` (70%) allows minor variations
+- Too low (e.g., 0.5) → accepts incorrect words
+- Too high (e.g., 0.9) → rejects valid pronunciations
+
+### Missed Words Tracking
+
+The app maintains a dictionary of missed words:
+
+```python
+missed_words = {}  # {word: count}
+
+for expected_word in practice_text.split():
+    if expected_word not in spoken_words:
+        missed_words[expected_word] = missed_words.get(expected_word, 0) + 1
+```
+
+This counts:
+- **Skipped words**: Words you didn't say at all
+- **Mispronounced words**: Words Whisper transcribed incorrectly (below fuzzy threshold)
+- **Repeated mistakes**: If you mispronounce "pronunciation" twice, it shows `pronunciation (2 times)`
+
+<Note>
+  Whisper's transcription accuracy depends on your microphone quality, background noise, and accent. Use a better Whisper model (medium/large) for improved results.
+</Note>

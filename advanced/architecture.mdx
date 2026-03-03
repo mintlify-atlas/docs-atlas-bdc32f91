@@ -1,0 +1,320 @@
+---
+title: System Architecture
+description: Understanding the internal architecture and component design of ChatbotAI-Free
+---
+
+# System Architecture
+
+ChatbotAI-Free is built as a modular, privacy-first desktop application using Python and PyQt6. This page explains how the components work together to deliver a seamless voice AI experience.
+
+## Architecture Overview
+
+The application follows a component-based architecture with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PyQt6 UI Layer (main.py)                 │
+│  - ChatbotWindow                                            │
+│  - Message Bubbles, Settings Dialog, Live Mode UI          │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────┴──────────────────────────────────────────┐
+│              Core AI Components                             │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
+│  │ AIManager  │  │ TTSManager │  │AudioRecorder│           │
+│  │ai_manager.py│  │tts_manager.│  │audio_utils.│            │
+│  │            │  │    py      │  │    py      │            │
+│  └────────────┘  └────────────┘  └────────────┘            │
+└─────────────────────────────────────────────────────────────┘
+                   │
+┌──────────────────┴──────────────────────────────────────────┐
+│                External Services & Models                    │
+│  - Ollama (LLM)                                             │
+│  - faster-whisper (STT)                                     │
+│  - Kokoro ONNX / Sherpa-ONNX (TTS)                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### AIManager (`ai_manager.py`)
+
+The central orchestrator for all AI operations.
+
+**Responsibilities:**
+- Manages Whisper STT (faster-whisper)
+- Interfaces with Ollama for LLM inference
+- Coordinates TTS generation via TTSManager
+- Maintains conversation history
+- Handles language switching (English/Spanish)
+- Tracks token usage for context window management
+
+**Key Features:**
+- Automatically uses multilingual Whisper models (removes `.en` suffix)
+- CUDA acceleration when available (falls back to CPU)
+- Streaming LLM responses with `get_llm_response_streaming()`
+- Supports `<think>...</think>` blocks for reasoning models
+- VAD filtering to reduce hallucinations
+
+**Code Location:** `/ai_manager.py:22-543`
+
+### TTSManager (`tts_manager.py`)
+
+Unified TTS engine that routes synthesis to the appropriate backend.
+
+**Routing Logic:**
+- **Kokoro voices** (no hyphens in name, e.g., `af_bella`, `ef_dora`) → Kokoro ONNX
+- **Sherpa voices** (contain hyphens, e.g., `vits-piper-es_AR-daniela-high`) → Sherpa-ONNX
+
+**Features:**
+- Lazy loading of Sherpa engines (cached per folder)
+- Speed adjustment support (`speed` parameter)
+- Language-aware synthesis (English: `en-us`, Spanish: `es`)
+- Returns numpy float32 arrays at native sample rates (24kHz for Kokoro)
+
+**Code Location:** `/tts_manager.py:26-151`
+
+### AudioRecorder (`audio_utils.py`)
+
+Handles microphone input with Voice Activity Detection (VAD).
+
+**Features:**
+- Real-time audio capture via `sounddevice`
+- Automatic sample rate detection and resampling
+- VAD-based silence detection (RMS threshold: 0.03)
+- Configurable silence duration (default: 3 seconds)
+- Pause/resume to prevent feedback loops
+- Queue-based architecture for thread-safe audio buffering
+
+**VAD Parameters:**
+- `silence_threshold`: RMS energy threshold (0.03)
+- `silence_duration`: Silence duration before stopping (3.0s)
+- `min_audio_duration`: Minimum clip length to process (1.0s)
+
+**Code Location:** `/audio_utils.py:13-180`
+
+### AudioPlayer (`audio_utils.py`)
+
+Plays TTS output via PipeWire (with sounddevice fallback).
+
+**Why PipeWire?**
+Using `paplay` allows the app to mix audio with other apps (YouTube, music players) without ALSA device locking conflicts.
+
+**Process:**
+1. Converts float32 audio to int16 WAV format
+2. Writes temporary `.wav` file
+3. Spawns `paplay` subprocess
+4. Cleans up temp file after playback
+
+**Code Location:** `/audio_utils.py:182-298`
+
+### Chat History (`chat_history.py`)
+
+Persistence layer for conversation management.
+
+**Storage Format:**
+Conversations are saved as Markdown files in the `chats/` directory:
+
+```markdown
+# Chat: [Auto-generated Title]
+*Date: 2026-03-03 14:32:15*
+
+---
+
+### 👤 User
+
+User's message content
+
+---
+
+### ✨ Bot
+
+Bot's response content
+
+---
+```
+
+**Features:**
+- Automatic title generation using lightest Ollama model
+- Fast listing (reads only first 3 lines for metadata)
+- Full message parsing for chat restoration
+- Rename and delete operations
+
+**Code Location:** `/chat_history.py:1-233`
+
+## Threading Model
+
+ChatbotAI-Free uses multiple thread types to maintain UI responsiveness:
+
+<CardGroup cols={2}>
+  <Card title="ManualRecorderThread" icon="microphone">
+    Walkie-talkie style recording thread. Records audio until `stop_recording()` is called, then emits the complete audio data.
+    
+    **Location:** `main.py:46-100`
+  </Card>
+
+  <Card title="WorkerThread" icon="brain">
+    Pipeline thread for Classic Chat mode:
+    1. Transcribe audio → Whisper
+    2. Stream LLM response → Ollama
+    3. Generate TTS per sentence → TTSManager
+    4. Play audio chunks → AudioPlayer
+    
+    **Location:** `main.py:122-349`
+  </Card>
+
+  <Card title="LiveWorkerThread" icon="podcast">
+    Continuous conversation thread for Live Mode with barge-in detection:
+    - VAD-based listening
+    - Real-time user interruption monitoring
+    - Automatic playback stopping when user speaks
+    
+    **Location:** `main.py:1020-1296`
+  </Card>
+
+  <Card title="TitleGeneratorThread" icon="sparkles">
+    Background thread that generates short chat titles using the lightest Ollama model (avoids blocking UI).
+    
+    **Location:** `main.py:102-120`
+  </Card>
+</CardGroup>
+
+## Data Flow: Microphone to Speakers
+
+<Steps>
+  <Step title="Audio Capture">
+    User speaks → `AudioRecorder` captures frames via sounddevice → Frames queued in `audio_queue`
+  </Step>
+
+  <Step title="VAD Processing">
+    `ManualRecorderThread` or `LiveWorkerThread` monitors RMS energy → Detects speech start/end → Concatenates audio chunks
+  </Step>
+
+  <Step title="Resampling">
+    If microphone native rate ≠ 16kHz, audio is resampled using linear interpolation to match Whisper's expected input
+  </Step>
+
+  <Step title="Transcription">
+    `AIManager.transcribe()` → faster-whisper processes float32 audio → Returns text (filters hallucinations like "thank you", "subscribe")
+  </Step>
+
+  <Step title="LLM Inference">
+    `AIManager.get_llm_response_streaming()` → Ollama generates response with streaming → Text chunks emitted via `on_chunk()` callback
+  </Step>
+
+  <Step title="Sentence Detection">
+    Streaming text monitored for sentence delimiters (`.`, `!`, `?`, `\n`) → Complete sentences sent to `on_sentence()` callback
+  </Step>
+
+  <Step title="TTS Generation">
+    Complete sentence → `TTSManager.create()` → Routed to Kokoro or Sherpa → Returns numpy float32 audio
+  </Step>
+
+  <Step title="Audio Playback">
+    Audio samples → `AudioPlayer.play()` → Writes temp WAV → `paplay` subprocess → PipeWire output
+  </Step>
+</Steps>
+
+<Note>
+  Steps 5-8 run in parallel threads to minimize latency. TTS generation starts as soon as the first sentence is ready, while the LLM continues generating the rest of the response.
+</Note>
+
+## Technology Stack
+
+| Component | Technology | Purpose |
+|-----------|------------|----------|
+| **UI Framework** | PyQt6 | Desktop application interface, event handling |
+| **LLM Backend** | Ollama | Local inference for Llama, Mistral, Gemma models |
+| **Speech Recognition** | faster-whisper (CTranslate2) | Real-time STT with CUDA acceleration |
+| **Text-to-Speech** | Kokoro ONNX v1.0 | High-quality neural TTS (54 voices, 2 languages) |
+| **Extra TTS Voices** | Sherpa-ONNX (optional) | Piper-compatible voice packs (multi-language) |
+| **Audio I/O** | sounddevice + paplay | Microphone capture and PipeWire playback |
+| **PDF Parsing** | PyMuPDF (fitz) | Text extraction from PDF documents |
+| **Token Counting** | tiktoken | Context window usage tracking |
+| **Markdown Rendering** | Custom HTML converter | Rich text display in chat bubbles |
+
+## Voice Detection & Interruption
+
+### Classic Chat Mode
+- Uses `silence_threshold = 0.03` (RMS)
+- Records until 3 seconds of silence detected
+- No interruption support (bot speaks until finished)
+
+### Live Mode
+- **Dual monitoring system:**
+  1. Main VAD loop for user speech start/end
+  2. Separate `_monitor_for_barge_in()` thread watching audio queue
+- **Barge-in detection:**
+  - Uses higher threshold (`silence_threshold * 2.0`)
+  - Requires 4 consecutive speech frames to trigger
+  - Sets `user_speaking` event → Stops playback immediately
+  - Clears audio queue and restarts listening
+
+**Code Location:** `main.py:1197-1237`
+
+## Context Window Management
+
+The app tracks token usage to prevent context overflow:
+
+1. **Token Counting:** Ollama returns `prompt_eval_count` and `eval_count` in streaming responses
+2. **Storage:** `AIManager.last_token_usage` dict stores `{"prompt": N, "completion": M, "total": N+M}`
+3. **Context Size Detection:** `get_model_context_size()` queries model metadata or respects user-defined `num_ctx`
+4. **UI Indicator:** `ContextDonut` widget displays usage as colored arc (green < 50%, yellow < 80%, red ≥ 80%)
+
+**Code Location:** `ai_manager.py:480-514`, `main.py:692-771`
+
+## Configuration & Preferences
+
+Settings are persisted in `preferences.json`:
+
+```json
+{
+  "language": "english",
+  "voice_name": "af_bella",
+  "voice_speed": 1.0,
+  "font_size": "medium",
+  "ollama_model": "llama3.1:8b",
+  "whisper_model": "base",
+  "audio_input_device": null,
+  "audio_output_device": null,
+  "auto_send_recording": false,
+  "num_ctx": 0
+}
+```
+
+**Managed by:** `preferences.py` (`load_preferences()`, `save_preferences()`)
+
+<Info>
+  The `num_ctx` parameter allows users to override the model's default context window size. Setting it to `0` uses the model's built-in default.
+</Info>
+
+## Markdown Rendering Pipeline
+
+Bot messages are rendered as HTML for rich formatting:
+
+1. **Text Processing:** `MarkdownRenderer.to_html()` converts markdown to styled HTML
+2. **Supported Features:**
+   - Code blocks with syntax highlighting backgrounds
+   - Inline code with monospace styling
+   - Headers (H1-H4)
+   - Bold/italic formatting
+   - Tables with alternating row colors
+   - Horizontal rules
+3. **Display:** `QTextBrowser` widget renders HTML with custom CSS
+
+**Code Location:** `main.py:351-461`
+
+## Reasoning Panel (Thinking Mode)
+
+For models that support reasoning:
+
+- **Detection:** Looks for `<think>...</think>` tags or native Ollama `thinking` field
+- **Routing:** Thinking content goes to `on_thinking()` callback, response text to `on_chunk()`
+- **UI:** `ThinkingWidget` displays collapsible panel with streaming thinking updates
+- **Fallback:** If model rejects `think: True` parameter (400 error), retries without it
+
+**Code Location:** `ai_manager.py:269-435`, `main.py:463-557`
+
+<Warning>
+  Only the final response (not the thinking content) is saved to conversation history to keep context windows manageable.
+</Warning>

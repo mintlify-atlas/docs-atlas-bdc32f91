@@ -1,0 +1,237 @@
+---
+title: 'Model Configuration'
+description: 'Select Ollama LLMs, configure Whisper STT models, and adjust context window settings'
+---
+
+ChatbotAI-Free uses two AI models: Ollama for LLM inference and faster-whisper for speech-to-text transcription.
+
+## Selecting Ollama Models
+
+Choose which LLM model to use for conversation from the top dropdown menu.
+
+<Steps>
+  <Step title="Pull a model">
+    First, download a model using the Ollama CLI:
+    ```bash
+    ollama pull llama3.1:8b
+    # or
+    ollama pull mistral
+    ollama pull gemma2:9b
+    ```
+  </Step>
+  
+  <Step title="Select in UI">
+    The model dropdown automatically populates with all locally available Ollama models.
+  </Step>
+  
+  <Step title="Switch models">
+    Change models at any time - the switch takes effect for the next message.
+  </Step>
+</Steps>
+
+<Info>
+The selected model is stored in `user_preferences.json`. If set to `null`, the app uses the first available model.
+</Info>
+
+### Supported Model Types
+
+ChatbotAI-Free works with any Ollama-compatible model:
+
+- **Llama** (llama3.1, llama3.2, llama3.3)
+- **Mistral** (mistral, mixtral)
+- **Gemma** (gemma, gemma2)
+- **Qwen** (qwen2, qwen2.5)
+- **Deepseek** (deepseek-r1, deepseek-v3)
+- Any custom or fine-tuned model
+
+## Whisper Model Sizes
+
+Choose your speech-to-text quality and speed tradeoff from the Settings panel.
+
+### Available Models
+
+| Model | Size | Speed | Accuracy | Use Case |
+|-------|------|-------|----------|----------|
+| **base** | ~140 MB | Fastest | Good | Real-time conversation (default) |
+| **small** | ~460 MB | Fast | Better | Balanced performance |
+| **medium** | ~1.5 GB | Moderate | High | Clear transcriptions |
+| **large-v3** | ~2.9 GB | Slower | Best | Maximum accuracy |
+
+<Note>
+ChatbotAI-Free always uses **multilingual** Whisper models (not `.en` variants) to support both English and Spanish. The `.en` suffix is automatically stripped in `ai_manager.py:63`.
+</Note>
+
+### Model Loading
+
+Whisper models are loaded via faster-whisper with CUDA acceleration if available:
+
+```python
+# From ai_manager.py:66-73
+self.whisper = WhisperModel(
+    actual_whisper_model,
+    device=self._device,        # "cuda" or "cpu"
+    compute_type=self._compute_type  # "float16" or "int8"
+)
+```
+
+On first run, faster-whisper downloads the model (can take several minutes depending on size).
+
+## Quality vs. Speed Tradeoffs
+
+Choosing the right Whisper model depends on your hardware and use case:
+
+<Accordion title="base (Recommended for most users)">
+  **Best for**: Real-time conversation, Live Mode
+  
+  - Fast transcription (< 1 second on modern CPUs)
+  - Good accuracy for clear speech
+  - Low VRAM usage (~500 MB on GPU)
+  - Default selection
+</Accordion>
+
+<Accordion title="small">
+  **Best for**: Better accuracy without major slowdown
+  
+  - Still fast enough for conversation
+  - Improved accuracy for accents and noisy environments
+  - Moderate VRAM usage (~1 GB on GPU)
+</Accordion>
+
+<Accordion title="medium">
+  **Best for**: High-quality transcription
+  
+  - Noticeable processing time (2-3 seconds)
+  - Excellent accuracy
+  - Higher VRAM usage (~2 GB on GPU)
+  - Not ideal for Live Mode
+</Accordion>
+
+<Accordion title="large-v3">
+  **Best for**: Maximum accuracy, offline use only
+  
+  - Slower transcription (5-10 seconds)
+  - Best possible accuracy
+  - Significant VRAM usage (~4 GB on GPU)
+  - Only use for Reading Practice mode or when accuracy is critical
+</Accordion>
+
+### Transcription Parameters
+
+The app uses these optimized settings for all Whisper models (from `ai_manager.py:157-172`):
+
+```python
+segments, info = self.whisper.transcribe(
+    audio_data,
+    language=whisper_lang,        # "en" or "es"
+    task="transcribe",            # not translation
+    beam_size=5,
+    best_of=5,                    # better quality
+    vad_filter=True,              # voice activity detection
+    vad_parameters=dict(
+        min_silence_duration_ms=500,
+        speech_pad_ms=400,
+    ),
+    condition_on_previous_text=False,  # prevent hallucinations
+    no_speech_threshold=0.6,
+    log_prob_threshold=-1.0,
+    compression_ratio_threshold=2.4,
+)
+```
+
+## Context Window Settings
+
+Control how much conversation history the LLM can see.
+
+### Default Behavior
+
+When `context_size` is set to `0` (default), the app uses each model's built-in context window:
+
+```python
+# From ai_manager.py:486-514
+def get_model_context_size(self):
+    # User override takes priority
+    if self.num_ctx and self.num_ctx > 0:
+        return self.num_ctx
+    
+    # Otherwise, query model metadata
+    info = ollama.show(self.ollama_model)
+    # Extract context_length from model_info
+    # Default fallback: 4096 tokens
+```
+
+Typical context sizes:
+- Llama 3.1: **128,000 tokens**
+- Mistral: **32,768 tokens**
+- Gemma 2: **8,192 tokens**
+
+### Custom Context Size
+
+Override the model's default by setting a custom value in Settings:
+
+<Steps>
+  <Step title="Open Settings">
+    Click ⚙️ Settings and find the "Context Window" field
+  </Step>
+  <Step title="Enter token count">
+    Specify the maximum number of tokens (e.g., `8192`, `16384`, `32768`)
+  </Step>
+  <Step title="Save and restart">
+    Changes take effect for the next conversation
+  </Step>
+</Steps>
+
+<Warning>
+Setting a context size larger than the model's native capacity may cause errors or degraded performance. Check your model's documentation before changing this setting.
+</Warning>
+
+### Context Window Indicator
+
+The bottom bar shows a donut chart indicating current context usage. Click it to see detailed token statistics:
+
+- **Prompt tokens**: Input text (user + history)
+- **Completion tokens**: AI response
+- **Total tokens**: Sum of both
+
+Token counts are captured from Ollama's response metadata (see `ai_manager.py:344-351`).
+
+## Model Restart Requirements
+
+Some model changes require restarting the application:
+
+| Setting | Restart Required? |
+|---------|------------------|
+| Switch Ollama model | No - takes effect immediately |
+| Change context size | No - applies to next conversation |
+| **Change Whisper model** | **Yes - app restart required** |
+| Change voice speed | No - takes effect immediately |
+
+<Info>
+When you change the Whisper model in Settings, the app offers to restart immediately. This is necessary because faster-whisper loads the model into memory at initialization.
+</Info>
+
+## GPU Acceleration
+
+Both Ollama and faster-whisper automatically use CUDA if available:
+
+### Whisper STT
+
+```python
+# From ai_manager.py:50-59
+import torch
+cuda_available = torch.cuda.is_available()
+self._device = "cuda" if cuda_available else "cpu"
+self._compute_type = "float16" if cuda_available else "int8"
+```
+
+- **GPU**: Uses `float16` precision for speed
+- **CPU**: Uses `int8` quantization for efficiency
+
+### Kokoro TTS
+
+For GPU-accelerated TTS, install the GPU version of ONNX Runtime:
+
+```bash
+pip install onnxruntime-gpu
+```
+
+This significantly speeds up voice synthesis for long responses.

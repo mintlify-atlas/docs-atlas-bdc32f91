@@ -1,0 +1,209 @@
+---
+title: Installation
+description: Step-by-step guide to installing ChatbotAI-Free and downloading required AI models
+---
+
+## Prerequisites
+
+Before installing ChatbotAI-Free, ensure you have the following:
+
+- **Python 3.10 or 3.11** (Python 3.12+ not yet tested)
+- **Ollama** installed and running — [ollama.ai](https://ollama.ai/)
+- **Git** for cloning the repository
+- **(Optional)** NVIDIA GPU with CUDA for faster inference
+
+<Note>
+ChatbotAI-Free runs on CPU, but GPU acceleration significantly improves response times for both LLM inference and voice synthesis.
+</Note>
+
+## Installation steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the ChatbotAI-Free repository from GitHub:
+
+    ```bash
+    git clone https://github.com/maximofraisinet/ChatbotAI-Free
+    cd ChatbotAI-Free
+    ```
+  </Step>
+
+  <Step title="Create a virtual environment">
+    Create and activate a Python virtual environment:
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate   # On Windows: venv\Scripts\activate
+    ```
+
+    <Info>
+    Using a virtual environment keeps your dependencies isolated and prevents conflicts with other Python projects.
+    </Info>
+  </Step>
+
+  <Step title="Install Python dependencies">
+    Install the required packages from `requirements.txt`:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    The key dependencies include:
+    - **PyQt6** (6.6.0+) - Modern GUI framework
+    - **faster-whisper** (0.10.0+) - Real-time speech recognition
+    - **ollama** (0.1.0+) - LLM inference client
+    - **kokoro-onnx** (0.4.0+) - Neural TTS engine
+    - **PyMuPDF** (1.23.0+) - PDF text extraction
+    - **tiktoken** (0.5.0+) - Token counting
+    - **sounddevice** & **numpy** - Audio I/O
+
+    <Warning>
+    The `onnxruntime` package in `requirements.txt` is CPU-only. For GPU acceleration, install the GPU version separately (see next step).
+    </Warning>
+  </Step>
+
+  <Step title="(Optional) Enable GPU acceleration">
+    If you have an NVIDIA GPU with CUDA, install the GPU-accelerated ONNX runtime:
+
+    ```bash
+    pip install onnxruntime-gpu
+    ```
+
+    This will significantly speed up:
+    - Kokoro TTS synthesis (300MB model runs much faster)
+    - Whisper transcription (especially medium/large models)
+
+    <Info>
+    The app automatically detects CUDA availability and uses GPU acceleration if available. If CUDA is not found, it falls back to CPU with no code changes needed.
+    </Info>
+  </Step>
+
+  <Step title="Download Kokoro voice models">
+    Kokoro v1.0 powers all built-in English and Spanish voices (54 voices total). The model files are too large for GitHub, so download them manually:
+
+    1. Go to the [kokoro-onnx releases page](https://github.com/thewh1teagle/kokoro-onnx/releases)
+    2. Download **`kokoro-v1.0.onnx`** (~300 MB)
+    3. Download **`voices-v1.0.bin`** (~27 MB)
+    4. Place both files in `voices/kokoro-v1.0/`:
+
+    ```
+    voices/
+    └── kokoro-v1.0/
+        ├── kokoro-v1.0.onnx    ← Neural TTS model
+        └── voices-v1.0.bin     ← 54 voice embeddings
+    ```
+
+    <Note>
+    On first launch, the voice scanner checks the `voices/` folder. If the Kokoro files are in place, you're ready to go immediately.
+    </Note>
+  </Step>
+
+  <Step title="Pull an Ollama model">
+    Download at least one LLM model to power conversations. For example:
+
+    ```bash
+    ollama pull llama3.1:8b
+    ```
+
+    **Recommended models:**
+    - `llama3.1:8b` - Good balance of speed and quality (8B parameters)
+    - `mistral:7b` - Fast and efficient (7B parameters)
+    - `gemma2:9b` - Google's Gemma model (9B parameters)
+    - `qwen2.5:7b` - Excellent multilingual support
+
+    <Info>
+    ChatbotAI-Free automatically detects all available Ollama models. You can switch between them in the UI dropdown.
+    </Info>
+
+    <Note>
+    The lightest available model is automatically used to generate chat titles. Having a small model like `llama3.1:8b` or smaller ensures fast title generation.
+    </Note>
+  </Step>
+
+  <Step title="Verify installation">
+    Test that everything is working:
+
+    ```bash
+    python main.py
+    ```
+
+    The app should launch with:
+    - ✓ Whisper model loaded (downloads on first run)
+    - ✓ Ollama configured
+    - ✓ TTS engine initialized
+    - ✓ Voice scanner detecting Kokoro voices
+
+    <Warning>
+    On first run, Whisper will download the `base` model (~140 MB). This may take a few minutes depending on your internet connection.
+    </Warning>
+  </Step>
+</Steps>
+
+## Optional: Add more voices
+
+Want voices in other languages beyond English and Spanish? You can add any [Piper-compatible Sherpa-ONNX voice pack](https://huggingface.co/csukuangfj).
+
+<Steps>
+  <Step title="Install Sherpa-ONNX">
+    ```bash
+    pip install sherpa-onnx
+    ```
+  </Step>
+
+  <Step title="Download a voice pack">
+    Browse available voices at [huggingface.co/csukuangfj](https://huggingface.co/csukuangfj). Download these files from the repo:
+    - The `.onnx` model file
+    - `tokens.txt`
+    - The `espeak-ng-data/` directory
+  </Step>
+
+  <Step title="Add to voices folder">
+    Place the downloaded folder directly inside `voices/`:
+
+    ```
+    voices/
+    ├── kokoro-v1.0/
+    │   ├── kokoro-v1.0.onnx
+    │   └── voices-v1.0.bin
+    └── vits-piper-es_AR-daniela-high/  ← New Sherpa voice
+        ├── es_AR-daniela-high.onnx
+        ├── tokens.txt
+        └── espeak-ng-data/
+    ```
+  </Step>
+
+  <Step title="Restart and classify">
+    On the next launch, the voice scanner detects the new folder and shows a dialog asking which language to assign. After confirmation, the voice appears in the voice selector dropdown.
+
+    <Info>
+    The app identifies Sherpa packs by the presence of a `.onnx` file and an `espeak-ng-data/` subdirectory.
+    </Info>
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Whisper model fails to load
+
+If you see errors about missing CUDA or compute type:
+- Ensure you have PyTorch installed: `pip install torch`
+- The app automatically falls back to CPU if CUDA is unavailable
+
+### Ollama connection errors
+
+If the app can't connect to Ollama:
+- Verify Ollama is running: `ollama list`
+- Check that the Ollama service is active: `ollama serve`
+
+### No audio output
+
+If TTS generates silence:
+- Verify Kokoro model files are in the correct location
+- Check audio device settings in the app's Settings panel
+- On Linux, ensure PipeWire or PulseAudio is running
+
+## Next steps
+
+<Card title="Quick start" icon="rocket" href="/quickstart">
+  Learn how to start your first conversation
+</Card>

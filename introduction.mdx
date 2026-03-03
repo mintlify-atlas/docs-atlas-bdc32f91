@@ -1,0 +1,87 @@
+---
+title: Introduction
+description: A fully offline voice chatbot powered by local LLMs, high-quality neural TTS, and real-time speech recognition
+---
+
+## What is ChatbotAI-Free?
+
+ChatbotAI-Free is a **privacy-first local Voice AI assistant** that runs entirely on your own hardware. Practice conversations, explore ideas, or just talk—all without sending a single byte to the cloud.
+
+Built with Python and PyQt6, it combines state-of-the-art open-source AI models to deliver a complete voice assistant experience that respects your privacy.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="100% offline & private" icon="shield-halved">
+    Everything runs locally via Ollama. Your conversations never leave your machine—no cloud, no tracking, no data collection.
+  </Card>
+  
+  <Card title="Real-time voice conversations" icon="microphone">
+    Faster-whisper STT with Voice Activity Detection, Kokoro neural TTS with 54+ voices, and seamless audio playback via PipeWire.
+  </Card>
+  
+  <Card title="Two conversation modes" icon="comments">
+    **Classic Chat** for turn-by-turn conversations with markdown rendering, or **Live Mode** for hands-free continuous dialog with natural barge-in.
+  </Card>
+  
+  <Card title="PDF document chat" icon="file-pdf">
+    Attach PDFs directly into conversations. Ask questions about documents without external vector databases or complex RAG pipelines.
+  </Card>
+  
+  <Card title="Multilingual support" icon="globe">
+    Kokoro TTS handles English and Spanish out of the box. Add any additional language via Sherpa-ONNX voice packs with auto-detection.
+  </Card>
+  
+  <Card title="Reading practice mode" icon="book-open">
+    Built-in shadowing coach that listens as you read aloud, highlights each word in real-time (green=correct, red=mispronounced), and provides accuracy feedback.
+  </Card>
+</CardGroup>
+
+## Why ChatbotAI-Free?
+
+### Privacy you can trust
+
+Unlike cloud-based assistants, ChatbotAI-Free keeps everything local. Your conversations, voice recordings, and documents stay on your device. No account required, no telemetry, no hidden cloud calls.
+
+### Powerful local AI
+
+Leverage the full power of local LLMs through Ollama—run Llama, Mistral, Gemma, or any model you choose. Get streaming responses with simultaneous TTS generation for natural, responsive conversations.
+
+### Production-quality voice pipeline
+
+- **Speech-to-Text**: faster-whisper with VAD for precise end-of-speech detection
+- **Text-to-Speech**: Kokoro ONNX v1.0 with neural voice synthesis
+- **Audio playback**: PipeWire-native playback that never blocks other apps
+
+### Smart conversation management
+
+Conversations are auto-saved as Markdown files with a collapsible sidebar. Chat titles are generated automatically by the lightest available Ollama model. Right-click any chat to rename or delete it.
+
+### Modern, customizable UI
+
+Dark theme inspired by Google Gemini with adjustable voice speed (0.5× – 2.0×), font size, audio devices, and a collapsible reasoning panel for thinking-capable models.
+
+## Technology stack
+
+| Component | Technology |
+|---|---|
+| Application & UI | Python 3.10+, PyQt6 |
+| LLM inference | Ollama |
+| Speech-to-Text | faster-whisper |
+| Text-to-Speech | Kokoro ONNX v1.0 |
+| Extra voices | Sherpa-ONNX (optional) |
+| PDF extraction | PyMuPDF |
+| Token counting | tiktoken |
+| Audio I/O | sounddevice, NumPy, paplay |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install ChatbotAI-Free and download required models
+  </Card>
+  
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get from installation to your first conversation
+  </Card>
+</CardGroup>

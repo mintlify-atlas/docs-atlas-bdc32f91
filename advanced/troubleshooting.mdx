@@ -1,0 +1,487 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for ChatbotAI-Free
+---
+
+# Troubleshooting
+
+This guide covers common issues you might encounter while using ChatbotAI-Free and how to resolve them.
+
+## Ollama Connection Issues
+
+<Accordion title="Error: 'Connection refused' or 'Ollama not responding'">
+  **Symptoms:**
+  - App crashes on startup or when sending messages
+  - Console shows `ConnectionError` or `Connection refused`
+  - "I'm sorry, I couldn't process that request" message appears
+
+  **Solutions:**
+
+  <Steps>
+    <Step title="Verify Ollama is running">
+      ```bash
+      ollama list
+      ```
+      This should show your installed models. If it fails, Ollama isn't running.
+    </Step>
+
+    <Step title="Start Ollama service">
+      The Ollama service usually starts automatically, but you can verify:
+      ```bash
+      # Check if Ollama is running
+      ps aux | grep ollama
+
+      # Or test the API directly
+      curl http://localhost:11434/api/tags
+      ```
+    </Step>
+
+    <Step title="Reinstall Ollama if needed">
+      If Ollama is broken, reinstall from [ollama.ai](https://ollama.ai/):
+      ```bash
+      curl -fsSL https://ollama.ai/install.sh | sh
+      ```
+    </Step>
+  </Steps>
+</Accordion>
+
+<Accordion title="Error: Model 'llama3.1:8b' not found">
+  **Symptoms:**
+  - "Model not found" errors when sending messages
+  - Dropdown shows models that don't work
+
+  **Solution:**
+
+  Pull the model you want to use:
+  ```bash
+  ollama pull llama3.1:8b
+  # or any other model
+  ollama pull mistral
+  ollama pull llama3.2:3b
+  ```
+
+  <Note>
+    The app automatically detects all locally-installed Ollama models. After pulling a new model, restart the app to see it in the dropdown.
+  </Note>
+</Accordion>
+
+<Accordion title="LLM responses are extremely slow">
+  **Symptoms:**
+  - Long delays (30+ seconds) before responses start
+  - UI freezes during generation
+
+  **Solutions:**
+
+  1. **Use a smaller model:**
+     - `llama3.2:3b` (3 billion parameters) is much faster than `llama3.1:8b`
+     - Try `tinyllama:1.1b` for testing
+
+  2. **Check GPU utilization:**
+     ```bash
+     nvidia-smi
+     ```
+     If you have an NVIDIA GPU, Ollama should be using it. If not, reinstall Ollama.
+
+  3. **Increase context window:**
+     - Go to Settings → Advanced → Context Window Size
+     - Try setting to 4096 or 8192 (smaller = faster)
+</Accordion>
+
+## Kokoro Model Issues
+
+<Accordion title="Error: 'Kokoro not available' or TTS returns silence">
+  **Symptoms:**
+  - No voice output (silent)
+  - Console shows: `⚠ Kokoro not available` or `TTS not available, returning silence`
+  - App starts but voice doesn't work
+
+  **Cause:**
+  Missing Kokoro model files (`kokoro-v1.0.onnx` and `voices-v1.0.bin`).
+
+  **Solution:**
+
+  <Steps>
+    <Step title="Download Kokoro files">
+      Go to [kokoro-onnx releases](https://github.com/thewh1teagle/kokoro-onnx/releases) and download:
+      - `kokoro-v1.0.onnx` (~300 MB)
+      - `voices-v1.0.bin` (~27 MB)
+    </Step>
+
+    <Step title="Place files in correct directory">
+      ```bash
+      mkdir -p voices/kokoro-v1.0/
+      # Move downloaded files here
+      mv ~/Downloads/kokoro-v1.0.onnx voices/kokoro-v1.0/
+      mv ~/Downloads/voices-v1.0.bin voices/kokoro-v1.0/
+      ```
+
+      Verify structure:
+      ```
+      voices/
+      └── kokoro-v1.0/
+          ├── kokoro-v1.0.onnx
+          └── voices-v1.0.bin
+      ```
+    </Step>
+
+    <Step title="Restart the app">
+      ```bash
+      python main.py
+      ```
+      You should see: `✓ Kokoro TTS loaded successfully!`
+    </Step>
+  </Steps>
+</Accordion>
+
+<Accordion title="Voice sounds robotic or distorted">
+  **Symptoms:**
+  - TTS output is choppy or robotic
+  - Audio has static or artifacts
+
+  **Solutions:**
+
+  1. **Try a different voice:**
+     - Use the voice dropdown to select a different Kokoro voice
+     - Some voices are higher quality than others
+
+  2. **Adjust voice speed:**
+     - Settings → Voice Speed → Try 0.9x or 1.1x
+     - Extreme speeds (< 0.6x or > 1.8x) can cause artifacts
+
+  3. **Check GPU acceleration:**
+     If you installed `onnxruntime-gpu`:
+     ```bash
+     pip show onnxruntime-gpu
+     ```
+     GPU acceleration significantly improves TTS quality.
+</Accordion>
+
+## Audio Device Problems
+
+<Accordion title="Error: 'paInvalidSampleRate' or microphone not working">
+  **Symptoms:**
+  - Console shows: `paInvalidSampleRate` or `Audio status: [error]`
+  - Recording doesn't capture any audio
+  - Recording stops immediately
+
+  **Solutions:**
+
+  1. **Select correct input device:**
+     - Settings → Audio Input Device → Select your microphone
+     - Try different devices in the dropdown
+
+  2. **Test microphone in terminal:**
+     ```bash
+     # List audio devices
+     python -c "import sounddevice as sd; print(sd.query_devices())"
+     ```
+
+  3. **Check permissions (Linux):**
+     ```bash
+     # Add user to audio group
+     sudo usermod -aG audio $USER
+     # Log out and back in
+     ```
+</Accordion>
+
+<Accordion title="No audio output / Can't hear TTS">
+  **Symptoms:**
+  - Bot generates responses but no sound plays
+  - Console shows: `paplay not found, falling back to sounddevice`
+  - Other apps play audio fine
+
+  **Solutions:**
+
+  1. **Install paplay (PipeWire/PulseAudio):**
+     ```bash
+     # Ubuntu/Debian
+     sudo apt install pulseaudio-utils
+
+     # Arch
+     sudo pacman -S libpulse
+
+     # Fedora
+     sudo dnf install pulseaudio-utils
+     ```
+
+  2. **Select correct output device:**
+     - Settings → Audio Output Device → Select your speakers/headphones
+
+  3. **Test audio manually:**
+     ```bash
+     # Test paplay
+     paplay /usr/share/sounds/alsa/Front_Center.wav
+     ```
+
+  <Info>
+    The app uses `paplay` to avoid ALSA device locking. This allows TTS to play simultaneously with YouTube, music players, etc.
+  </Info>
+</Accordion>
+
+<Accordion title="Echo or feedback loop during Live Mode">
+  **Symptoms:**
+  - Bot hears its own voice and responds to itself
+  - Continuous loop of responses
+
+  **Solutions:**
+
+  1. **Use headphones** (best solution)
+  2. **Reduce speaker volume**
+  3. **Increase microphone threshold:**
+     - Edit `audio_utils.py:16`
+     - Change `silence_threshold=0.03` to `0.05` or higher
+</Accordion>
+
+## GPU & CUDA Issues
+
+<Accordion title="CUDA not detected / Using CPU instead of GPU">
+  **Symptoms:**
+  - Console shows: `CUDA available: False`
+  - Whisper and TTS are slow
+  - `nvidia-smi` shows GPU but app doesn't use it
+
+  **Solutions:**
+
+  <Steps>
+    <Step title="Verify CUDA installation">
+      ```bash
+      nvidia-smi
+      nvcc --version
+      ```
+      You need NVIDIA drivers + CUDA toolkit 11.8 or 12.x.
+    </Step>
+
+    <Step title="Install PyTorch with CUDA">
+      ```bash
+      pip uninstall torch
+      pip install torch --index-url https://download.pytorch.org/whl/cu118
+      ```
+      Replace `cu118` with your CUDA version (check with `nvcc --version`).
+    </Step>
+
+    <Step title="Install ONNX Runtime GPU">
+      ```bash
+      pip uninstall onnxruntime
+      pip install onnxruntime-gpu
+      ```
+      This accelerates Kokoro TTS.
+    </Step>
+
+    <Step title="Restart and verify">
+      ```bash
+      python main.py
+      ```
+      Look for:
+      - `CUDA available: True`
+      - `Loading Whisper model: base on cuda`
+    </Step>
+  </Steps>
+</Accordion>
+
+<Accordion title="Out of VRAM / CUDA out of memory">
+  **Symptoms:**
+  - `RuntimeError: CUDA out of memory`
+  - App crashes during transcription or TTS
+
+  **Solutions:**
+
+  1. **Use smaller Whisper model:**
+     - Settings → Whisper Model → Select `base` or `small` instead of `medium` or `large-v3`
+
+  2. **Use int8 quantization:**
+     - Edit `ai_manager.py:55`
+     - Change `self._compute_type = "float16"` to `"int8"`
+
+  3. **Close other GPU applications:**
+     ```bash
+     nvidia-smi
+     # Kill processes using GPU
+     ```
+</Accordion>
+
+## Whisper Model Errors
+
+<Accordion title="Whisper downloads model every time / Model not found">
+  **Symptoms:**
+  - "Downloading model..." on every startup
+  - Slow first transcription (30+ seconds)
+
+  **Cause:**
+  Models are cached in `~/.cache/huggingface/hub/` but may fail to download on slow connections.
+
+  **Solution:**
+
+  Download models manually:
+  ```bash
+  # In Python console
+  from faster_whisper import WhisperModel
+  WhisperModel("base", device="cpu")  # Downloads base model
+  WhisperModel("small", device="cpu")  # Downloads small model
+  ```
+
+  Or specify cache directory:
+  ```bash
+  export HF_HOME="/path/to/models/"
+  python main.py
+  ```
+</Accordion>
+
+<Accordion title="Transcription returns empty text or hallucinations">
+  **Symptoms:**
+  - Whisper returns: "Thank you", "Subscribe", "..." for real speech
+  - Short recordings transcribed as empty
+
+  **Solutions:**
+
+  1. **Speak longer (> 1 second)**
+     - The app filters audio shorter than 1 second
+     - Try speaking for 2-3 seconds
+
+  2. **Check microphone volume:**
+     ```bash
+     # Test recording
+     arecord -d 3 test.wav
+     aplay test.wav
+     ```
+     If too quiet, increase microphone gain in system settings.
+
+  3. **Disable hallucination filter (if needed):**
+     - Edit `ai_manager.py:133-143`
+     - Comment out the hallucination phrase checks
+     - (Not recommended - may cause false positives)
+</Accordion>
+
+<Accordion title="Transcription is in wrong language">
+  **Symptoms:**
+  - Spanish speech transcribed as English (or vice versa)
+  - Nonsensical transcriptions
+
+  **Solution:**
+
+  Change language in Settings:
+  - Settings → Language → Select "Spanish" or "English"
+  - The app sets Whisper's `language` parameter accordingly (`en` or `es`)
+
+  <Warning>
+    The app automatically removes `.en` suffix from Whisper models to ensure multilingual support. If you manually specify `base.en`, it will use `base` instead.
+  </Warning>
+</Accordion>
+
+## Voice Detection Issues
+
+<Accordion title="Recording doesn't stop / Listens forever">
+  **Symptoms:**
+  - Microphone button stays red indefinitely
+  - No transcription after 30 seconds
+
+  **Cause:**
+  Background noise prevents silence detection.
+
+  **Solutions:**
+
+  1. **Reduce background noise** (close windows, turn off fans)
+
+  2. **Increase silence threshold:**
+     - Edit `audio_utils.py:16`
+     - Change `silence_threshold=0.03` to `0.05`
+
+  3. **Use manual send mode:**
+     - Settings → Recording Mode → Disable "Auto-send after silence"
+     - Click mic button twice: once to start, once to stop
+</Accordion>
+
+<Accordion title="Recording stops too early">
+  **Symptoms:**
+  - Long sentences get cut off mid-speech
+  - Transcription only captures first few words
+
+  **Solutions:**
+
+  1. **Increase silence duration:**
+     - Edit `audio_utils.py:16`
+     - Change `silence_duration=3.0` to `5.0` (seconds)
+
+  2. **Speak continuously** without long pauses
+
+  3. **Lower silence threshold:**
+     - Edit `audio_utils.py:16`
+     - Change `silence_threshold=0.03` to `0.02`
+</Accordion>
+
+## PDF Document Chat Issues
+
+<Accordion title="PDF attachment fails or shows 'Could not extract text'">
+  **Symptoms:**
+  - PDF upload button does nothing
+  - Error dialog: "Failed to extract text"
+
+  **Solutions:**
+
+  1. **Install PyMuPDF:**
+     ```bash
+     pip install PyMuPDF
+     ```
+
+  2. **Check PDF format:**
+     - Scanned PDFs (images) won't work without OCR
+     - Use text-based PDFs only
+
+  3. **Try a different PDF** - Some encrypted PDFs block text extraction
+</Accordion>
+
+<Accordion title="Context window overflow after attaching PDF">
+  **Symptoms:**
+  - Dialog shows: "Document exceeds context window"
+  - Token count is red in confirmation dialog
+
+  **Solutions:**
+
+  1. **Use a model with larger context:**
+     - `llama3.1:8b` supports 128K tokens
+     - `mistral` supports 32K tokens
+
+  2. **Increase context window override:**
+     - Settings → Advanced → Context Window Size
+     - Set to 32768 or 65536 (if model supports it)
+
+  3. **Use a shorter PDF** or extract only relevant pages
+</Accordion>
+
+## General Performance Issues
+
+<Accordion title="App is slow or UI freezes">
+  **Solutions:**
+
+  1. **Use smaller models:**
+     - Whisper: `base` instead of `medium` or `large-v3`
+     - Ollama: `llama3.2:3b` instead of `llama3.1:8b`
+
+  2. **Enable GPU acceleration** (see CUDA section above)
+
+  3. **Close other apps** to free RAM and VRAM
+
+  4. **Reduce font size:**
+     - Settings → Font Size → Small
+     - Less markdown rendering overhead
+</Accordion>
+
+## Getting More Help
+
+If you're still experiencing issues:
+
+1. **Check the console output** for detailed error messages:
+   ```bash
+   python main.py 2>&1 | tee debug.log
+   ```
+
+2. **Search GitHub issues:** [ChatbotAI-Free Issues](https://github.com/maximofraisinet/ChatbotAI-Free/issues)
+
+3. **Open a new issue** with:
+   - Operating system and version
+   - Python version (`python --version`)
+   - Full console output (`debug.log`)
+   - Steps to reproduce the problem
+
+<Info>
+  Most issues are related to missing dependencies or incorrect model paths. Double-check the installation steps in the README before opening an issue.
+</Info>
