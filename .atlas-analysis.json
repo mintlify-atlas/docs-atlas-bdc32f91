@@ -1,0 +1,67 @@
+{
+  "projectType": "saas",
+  "projectName": "ChatbotAI-Free",
+  "projectDescription": "Privacy-first local Voice AI assistant with offline LLM chat, real-time Whisper STT, Kokoro neural TTS, PDF Q&A, and reading practice.",
+  "theme": "almond",
+  "primaryColor": "#8B5CF6",
+  "lightColor": "#A78BFA",
+  "darkColor": "#7C3AED",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Core Features",
+        "pages": [
+          "features/chat-modes",
+          "features/voice-system",
+          "features/pdf-chat",
+          "features/reading-practice"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration/settings",
+          "configuration/voices",
+          "configuration/models",
+          "configuration/audio-devices"
+        ]
+      },
+      {
+        "group": "Advanced",
+        "pages": [
+          "advanced/architecture",
+          "advanced/troubleshooting",
+          "advanced/contributing"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Offline voice AI with Whisper STT and Kokoro TTS",
+    "Dual conversation modes (Classic Chat and Live Mode)",
+    "Multilingual support (English and Spanish)",
+    "PDF document Q&A integration",
+    "Reading practice mode with real-time pronunciation feedback",
+    "Local LLM inference via Ollama",
+    "Privacy-first design with no cloud dependencies",
+    "Extensible voice system supporting Sherpa-ONNX packs"
+  ],
+  "publicApiSurface": [
+    "AIManager - Main AI coordination class (Whisper, Ollama, TTS)",
+    "TTSManager - Text-to-speech synthesis (Kokoro/Sherpa)",
+    "AudioRecorder - Audio input with VAD",
+    "AudioPlayer - Audio playback",
+    "KokoroWrapper - Kokoro TTS engine interface",
+    "SherpaWrapper - Sherpa-ONNX TTS interface",
+    "ChatHistory - Conversation persistence",
+    "VoiceScanner - Automatic voice pack detection"
+  ]
+}
